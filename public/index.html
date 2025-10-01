@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ma Collection de Musique - Discogs</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="app-header">
+            <div class="header-main">
+                <div class="brand-block">
+                    <h1>🎵 Base Musicale</h1>
+                    <p>Collection + listes classées</p>
+                </div>
+                <div class="header-actions">
+                    <button id="themeToggle" class="theme-toggle" aria-label="Basculer le thème" title="Basculer thème">🌙</button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="main-nav">
+            <ul>
+                <li><a href="#" class="nav-link active" data-section="albums">Les albums</a></li>
+                <li><a href="#" class="nav-link" data-section="lists">Listes classées</a></li>
+                <li><a href="#" class="nav-link" data-section="stats">Statistiques</a></li>
+                <li><a href="#" class="nav-link" data-section="admin">Administration</a></li>
+            </ul>
+        </nav>
+
+        <main class="workspace">
+            <aside class="side-panel">
+                <section class="card add-album">
+                    <div class="card-header">
+                        <h2>Ajouter un album</h2>
+                        <p class="card-subtitle">Renseignez un numéro de release Discogs pour enrichir votre collection.</p>
+                    </div>
+                    <form id="addAlbumForm" class="form-vertical">
+                        <label for="releaseId">Numéro de release Discogs</label>
+                        <div class="input-row">
+                            <input type="number" id="releaseId" name="releaseId" placeholder="Ex: 249504" required>
+                            <button type="submit" class="btn btn-primary">Ajouter</button>
+                        </div>
+                    </form>
+                    <div id="message" class="message" role="status" aria-live="polite"></div>
+                </section>
+
+                <section class="card status-card">
+                    <div class="card-header compact">
+                        <h3>État de l'intégration</h3>
+                    </div>
+                    <dl class="status-list">
+                        <div>
+                            <dt>Discogs Token</dt>
+                            <dd id="discogsStatus" class="badge badge-pending">Vérification…</dd>
+                        </div>
+                        <div>
+                            <dt>Port serveur</dt>
+                            <dd id="serverPort">–</dd>
+                        </div>
+                        <div>
+                            <dt>Uptime</dt>
+                            <dd id="serverUptime">–</dd>
+                        </div>
+                    </dl>
+                    <p class="status-help">Ajoutez <code>DISCOGS_TOKEN</code> dans <code>.env</code> pour améliorer la qualité des recherches.</p>
+                </section>
+
+                <section class="card tips-card">
+                    <div class="card-header compact">
+                        <h3>Astuce</h3>
+                    </div>
+                    <p>Utilisez les listes classées pour préparer des sets, compiler des recommandations ou suivre vos coups de cœur du moment.</p>
+                </section>
+            </aside>
+
+            <section class="content-panel">
+                <section class="stats-grid" id="statsBar">
+                    <article class="stat-card">
+                        <span class="stat-label">Albums</span>
+                        <span class="stat-value" id="statAlbums">0</span>
+                        <span class="stat-meta" id="statAlbumsMeta">Ajoutez votre premier album.</span>
+                    </article>
+                    <article class="stat-card">
+                        <span class="stat-label">Listes</span>
+                        <span class="stat-value" id="statLists">0</span>
+                        <span class="stat-meta" id="statListsMeta">Créez une liste personnalisée.</span>
+                    </article>
+                    <article class="stat-card">
+                        <span class="stat-label">Tags uniques</span>
+                        <span class="stat-value" id="statTags">0</span>
+                        <span class="stat-meta" id="statTagsMeta">Ajoutez des tags pour mieux filtrer.</span>
+                    </article>
+                </section>
+
+                <section class="collection" id="albumsSection">
+                    <div class="section-heading">
+                        <h2>Les albums</h2>
+                        <div class="album-toolbar">
+                            <label for="albumSearch" class="sr-only">Filtrer les albums</label>
+                            <input type="search" id="albumSearch" placeholder="Filtrer par artiste, album ou label…" autocomplete="off">
+                            <div class="year-filter" aria-label="Filtrer par année de parution">
+                                <input type="number" id="yearFilter" placeholder="Année" min="1900" max="2100" aria-label="Filtrer par année exacte">
+                                <button type="button" id="clearYearFilter" class="btn-ghost small" aria-label="Effacer le filtre année">✕</button>
+                            </div>
+                            <button type="button" id="clearAlbumSearch" class="btn-ghost" aria-label="Réinitialiser le filtre texte">Réinitialiser</button>
+                        </div>
+                    </div>
+                    <div id="albumsContainer" class="albums-grid">
+                        <!-- Les albums seront affichés ici -->
+                    </div>
+                    <div id="emptyState" class="empty-state" style="display: none;">
+                        <p>Votre collection est vide. Ajoutez votre premier album !</p>
+                    </div>
+                </section>
+
+                <section class="lists" id="listsSection" style="display:none;">
+                    <div class="section-heading">
+                        <h2>Listes classées</h2>
+                        <p class="section-subtitle">Organisez vos albums par humeur, genre ou projet.</p>
+                    </div>
+                    <form id="createListForm" class="inline-form">
+                        <input type="text" id="listName" placeholder="Nom de la liste" required>
+                        <input type="text" id="listDescription" placeholder="Description (optionnel)">
+                        <button type="submit" class="btn btn-primary create-list-btn" aria-label="Créer une nouvelle liste">➕ Créer la liste</button>
+                    </form>
+                    <div id="listsContainer" class="lists-container"></div>
+                    <div id="listDetails" class="list-details" style="display:none"></div>
+                </section>
+                <section class="stats-page" id="statsSection" style="display:none;">
+                    <div class="section-heading">
+                        <h2>Statistiques</h2>
+                        <p class="section-subtitle">Vue d'ensemble de votre collection et des listes.</p>
+                    </div>
+                    <div class="stats-charts" id="statsCharts">
+                        <div class="chart-card">
+                            <h3>Évolution par année</h3>
+                            <canvas id="yearChart" width="900" height="220" aria-label="Histogramme des albums par année" role="img"></canvas>
+                            <div class="chart-legend" id="yearChartLegend"></div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Genres / Styles (Top 12)</h3>
+                            <canvas id="genreChart" width="900" height="220" aria-label="Diagramme des genres les plus fréquents" role="img"></canvas>
+                            <div class="chart-legend" id="genreChartLegend"></div>
+                        </div>
+                    </div>
+                </section>
+                <section class="admin" id="adminSection" style="display:none;">
+                    <div class="section-heading">
+                        <h2>Administration</h2>
+                        <p class="section-subtitle">Outils internes (export JSON)</p>
+                    </div>
+                    <div class="admin-tools">
+                        <button id="checkDbHealthBtn" class="btn-ghost">Vérifier la base</button>
+                        <button id="rebuildDbBtn" class="btn-ghost" style="display:none;">Recréer le schéma</button>
+                        <button id="exportJsonBtn" class="btn btn-primary">Exporter (JSON)</button>
+                        <button id="downloadJsonBtn" class="btn-ghost" style="display:none;">Télécharger</button>
+                        <label class="import-label" style="display:none;">
+                            <input type="file" id="importJsonFile" accept="application/json" style="display:none;">
+                            <span class="btn-ghost" id="importJsonTrigger">Importer JSON</span>
+                        </label>
+                        <button id="refreshLogsBtn" class="btn-ghost">Logs</button>
+                        <select id="logsLimitSelect" class="logs-limit-select">
+                            <option value="50">50</option>
+                            <option value="100" selected>100</option>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                        </select>
+                    </div>
+                    <div id="dbHealthSummary" class="db-health" style="display:none;"></div>
+                    <div id="importStatus" class="import-status" style="display:none;"></div>
+                    <div id="logsPanel" class="logs-panel" style="display:none;">
+                        <h3 class="logs-title">Journal des opérations</h3>
+                        <div id="logsContainer" class="logs-container"></div>
+                    </div>
+                    <pre id="exportResult" class="export-result" aria-label="Résultat export" style="display:none;"></pre>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+    <div id="albumModal" class="album-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display:none;">
+        <div class="album-modal-backdrop" data-close="1"></div>
+        <div class="album-modal-dialog" role="document">
+            <button class="album-modal-close" data-close="1" aria-label="Fermer">×</button>
+            <div class="album-modal-body" id="albumModalBody"></div>
+        </div>
+    </div>
+</body>
+</html>
