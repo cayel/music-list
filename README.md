@@ -17,7 +17,7 @@ Application web légère pour gérer une collection d'albums avec intégration D
 - 💾 SQLite local (schéma auto-créé, intégrité référentielle)
 - 🎨 Thème clair/sombre avec palette acier/bleu
 
-Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre (supprimé), rafraîchissement global massif, authentification (à implémenter si besoin), pagination.
+Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre (supprimé), rafraîchissement global massif (endpoint supprimé), pagination.
 
 ## Données persistées
 
@@ -127,9 +127,28 @@ Remarque : endpoints supprimés / non implémentés volontairement (`/api/albums
 
 Chaque mutation (albums, listes, items, tags, admin) génère une ligne dans `operation_logs` avec un code d'action (`album.add`, `list_item.remove`, etc.). Le front colorise selon la catégorie et affiche le JSON contextuel.
 
-## Améliorations possibles (TODO)
+### Sécurité / Accès Admin
 
-- Authentification / token admin
+Les endpoints `/api/admin/*` peuvent être protégés en définissant une variable d'environnement `ADMIN_TOKEN`. Le client inclut alors automatiquement l'en-tête `x-admin-token` s'il est stocké dans `localStorage` (clé `ml-admin-token`).
+
+Pour activer côté navigateur, exécuter dans la console :
+```js
+localStorage.setItem('ml-admin-token', 'VOTRE_TOKEN');
+```
+Puis recharger la page.
+
+### Déploiement sur Render (exemple)
+
+Un fichier `render.yaml` est fourni. Étapes :
+1. Créer un nouveau service Web (Node) sur Render et connecter le repo.
+2. Build command: `npm install` ; Start command: `node server.js`.
+3. Ajouter un disque persistant (ex: 1GB) monté sur `/var/data` et définir `DB_PATH=/var/data/music_collection.db`.
+4. Définir les variables d'environnement sensibles dans le dashboard : `DISCOGS_TOKEN`, `ADMIN_TOKEN`.
+5. Déployer. Le serveur écoute `PORT` fourni par Render automatiquement.
+
+### Améliorations possibles (TODO)
+
+- Authentification plus avancée (RBAC, sessions)
 - Pagination / chargement progressif des logs
 - Filtrage/tooltip interactif des charts
 - Sauvegarde préférences utilisateur (vue mosaïque, etc.)

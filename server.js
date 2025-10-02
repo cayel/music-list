@@ -11,10 +11,25 @@ const PORT = process.env.PORT || 3000;
 const DISCOGS_API_URL = 'https://api.discogs.com';
 const USER_AGENT = 'MusicListApp/1.0';
 const DISCOGS_TOKEN = process.env.DISCOGS_TOKEN || null;
+const DB_PATH = process.env.DB_PATH || './music_collection.db';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || null; // Si défini, protège les endpoints /api/admin
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static('public'));
+
+// Middleware d'authentification admin (basé sur header x-admin-token ou query ?admin_token=)
+function adminAuth(req, res, next) {
+    if (!ADMIN_TOKEN) return next(); // Pas d'ADMIN_TOKEN => endpoints publics (dev / self-host simple)
+    const token = req.headers['x-admin-token'] || req.query.admin_token;
+    if (token !== ADMIN_TOKEN) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+}
+
+// Applique l'auth à tous les endpoints /api/admin/*
+app.use('/api/admin', adminAuth);
 
 if (!DISCOGS_TOKEN) {
     console.warn('[Discogs] Aucun DISCOGS_TOKEN défini. Ajoutez-le dans .env pour des limites plus larges.');
@@ -24,8 +39,10 @@ app.get('/api/status', (req, res) => {
     res.json({ discogsToken: !!DISCOGS_TOKEN, uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
-const db = new sqlite3.Database('./music_collection.db');
+const db = new sqlite3.Database(DB_PATH);
 db.run('PRAGMA foreign_keys = ON');
+db.run('PRAGMA journal_mode = WAL');
+console.log(`[DB] SQLite initialisée sur ${DB_PATH}`);
 
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS albums (
@@ -205,28 +222,7 @@ app.patch('/api/albums/:id/refresh', (req, res) => {
     });
 });
 
-app.post('/api/albums/refresh-all', (req, res) => {
-    db.all('SELECT id, release_id FROM albums', async (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const results = [];
-        for (const r of rows) {
-            try {
-                const data = await fetchDiscogsRelease(r.release_id);
-                const mapped = mapReleaseData(data);
-                await new Promise((resolve, reject) => {
-                    db.run(`UPDATE albums SET artist_name=?, album_title=?, release_year=?, genre=?, style=?, label=?, cover_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-                        [mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url, r.id],
-                        (uErr) => uErr ? reject(uErr) : resolve());
-                });
-                results.push({ id: r.id, status: 'ok' });
-            } catch (e) {
-                results.push({ id: r.id, status: 'error', message: e.message });
-            }
-        }
-        logOperation('album.refresh_all', 'album', null, { total: rows.length, ok: results.filter(r=>r.status==='ok').length });
-        res.json({ message: 'Rafraîchissement terminé', results });
-    });
-});
+// Endpoint /api/albums/refresh-all retiré (fonctionnalité considérée trop lourde / peu utilisée)
 
 // Listes
 app.get('/api/lists', (req, res) => {

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: music-list
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/music_collection.db
+      # Définir DISCOGS_TOKEN et ADMIN_TOKEN via le dashboard Render (variables masquées)
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1

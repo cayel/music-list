@@ -1,5 +1,12 @@
 // Configuration de l'API
 const API_BASE_URL = '/api';
+// Gestion optionnelle du token admin : stocké dans localStorage sous la clé 'ml-admin-token'
+function getAdminHeaders(extra={}) {
+    const h = { ...extra };
+    const t = localStorage.getItem('ml-admin-token');
+    if (t) h['x-admin-token'] = t;
+    return h;
+}
 
 // Éléments du DOM
 const addAlbumForm = document.getElementById('addAlbumForm');
@@ -108,7 +115,7 @@ async function handleRefreshLogs() {
     logsContainer.innerHTML = '<div class="log-entry">Chargement...</div>';
     const limit = logsLimitSelect ? parseInt(logsLimitSelect.value, 10) : 100;
     try {
-        const res = await fetch(`${API_BASE_URL}/admin/logs?limit=${limit}`);
+    const res = await fetch(`${API_BASE_URL}/admin/logs?limit=${limit}`, { headers: getAdminHeaders() });
         if (!res.ok) throw new Error('Erreur chargement logs');
         const rows = await res.json();
         if (!Array.isArray(rows) || !rows.length) {
@@ -335,7 +342,7 @@ async function handleExportJson() {
     exportResultPre.textContent = 'Export en cours...';
     downloadJsonBtn && (downloadJsonBtn.style.display='none');
     try {
-        const res = await fetch(`${API_BASE_URL}/admin/export`);
+    const res = await fetch(`${API_BASE_URL}/admin/export`, { headers: getAdminHeaders() });
         if (!res.ok) throw new Error('Erreur export');
         lastExportPayload = await res.json();
         const pretty = JSON.stringify(lastExportPayload, null, 2);
@@ -354,7 +361,7 @@ async function handleDbHealthCheck() {
     rebuildDbBtn && (rebuildDbBtn.style.display='none');
     importJsonTrigger && (importJsonTrigger.parentElement.style.display='none');
     try {
-        const res = await fetch(`${API_BASE_URL}/admin/health`);
+    const res = await fetch(`${API_BASE_URL}/admin/health`, { headers: getAdminHeaders() });
         if (!res.ok) throw new Error('Health check échoué');
         const data = await res.json();
         const missing = Object.entries(data.tables).filter(([k,v]) => !v).map(([k])=>k);
@@ -387,7 +394,7 @@ async function handleRebuildDb() {
     if (!confirm('Recréer le schéma si nécessaire ?')) return;
     rebuildDbBtn.disabled = true; const original = rebuildDbBtn.textContent; rebuildDbBtn.textContent='...';
     try {
-        const res = await fetch(`${API_BASE_URL}/admin/rebuild`, { method:'POST' });
+    const res = await fetch(`${API_BASE_URL}/admin/rebuild`, { method:'POST', headers: getAdminHeaders() });
         if (!res.ok) throw new Error('Erreur reconstruction');
         const data = await res.json();
         showMessage(data.message || 'Schéma OK', 'success');
@@ -409,7 +416,7 @@ async function handleImportJson(evt) {
         let json;
         try { json = JSON.parse(text); } catch { throw new Error('JSON invalide'); }
         importStatusBox.textContent='Envoi vers le serveur...';
-        const res = await fetch(`${API_BASE_URL}/admin/import`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(json) });
+    const res = await fetch(`${API_BASE_URL}/admin/import`, { method:'POST', headers: getAdminHeaders({'Content-Type':'application/json'}), body: JSON.stringify(json) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur import');
         importStatusBox.className='import-status success';
