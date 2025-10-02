@@ -119,6 +119,18 @@ document.addEventListener('DOMContentLoaded', () => {
     initAdminDebug();
 });
 
+// ====== FILTRE ALBUMS (manquants restaurés) ======
+function handleAlbumFilterInput(e) {
+    currentAlbumFilter = e.target.value || '';
+    renderAlbums();
+}
+
+function resetAlbumFilter() {
+    currentAlbumFilter = '';
+    if (albumSearchInput) albumSearchInput.value = '';
+    renderAlbums();
+}
+
 function initTheme() {
     const btn = document.getElementById('themeToggle');
     if (!btn) return;
