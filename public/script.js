@@ -8,6 +8,29 @@ function getAdminHeaders(extra={}) {
     return h;
 }
 
+// Wrapper fetch pour endpoints admin avec gestion d'erreur et 401 explicite
+async function adminFetch(path, options={}) {
+    const finalOpts = { ...options };
+    finalOpts.headers = getAdminHeaders(finalOpts.headers || {});
+    let res;
+    try {
+        res = await fetch(`${API_BASE_URL}${path}`, finalOpts);
+    } catch (e) {
+        throw new Error('Réseau: ' + e.message);
+    }
+    if (res.status === 401) {
+        throw new Error('401 Non autorisé (définissez localStorage ml-admin-token)');
+    }
+    let data = null;
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) { try { data = await res.json(); } catch { /* ignore */ } }
+    if (!res.ok) {
+        const msg = (data && (data.error || data.message)) ? data.error || data.message : `Erreur HTTP ${res.status}`;
+        throw new Error(msg);
+    }
+    return data;
+}
+
 // Éléments du DOM
 const addAlbumForm = document.getElementById('addAlbumForm');
 const releaseIdInput = document.getElementById('releaseId');
@@ -115,9 +138,7 @@ async function handleRefreshLogs() {
     logsContainer.innerHTML = '<div class="log-entry">Chargement...</div>';
     const limit = logsLimitSelect ? parseInt(logsLimitSelect.value, 10) : 100;
     try {
-    const res = await fetch(`${API_BASE_URL}/admin/logs?limit=${limit}`, { headers: getAdminHeaders() });
-        if (!res.ok) throw new Error('Erreur chargement logs');
-        const rows = await res.json();
+        const rows = await adminFetch(`/admin/logs?limit=${limit}`);
         if (!Array.isArray(rows) || !rows.length) {
             logsContainer.innerHTML = '<div class="log-entry">Aucune entrée.</div>';
             return;
@@ -342,9 +363,7 @@ async function handleExportJson() {
     exportResultPre.textContent = 'Export en cours...';
     downloadJsonBtn && (downloadJsonBtn.style.display='none');
     try {
-    const res = await fetch(`${API_BASE_URL}/admin/export`, { headers: getAdminHeaders() });
-        if (!res.ok) throw new Error('Erreur export');
-        lastExportPayload = await res.json();
+        lastExportPayload = await adminFetch(`/admin/export`);
         const pretty = JSON.stringify(lastExportPayload, null, 2);
         exportResultPre.textContent = pretty;
         if (downloadJsonBtn) downloadJsonBtn.style.display='';
@@ -361,9 +380,7 @@ async function handleDbHealthCheck() {
     rebuildDbBtn && (rebuildDbBtn.style.display='none');
     importJsonTrigger && (importJsonTrigger.parentElement.style.display='none');
     try {
-    const res = await fetch(`${API_BASE_URL}/admin/health`, { headers: getAdminHeaders() });
-        if (!res.ok) throw new Error('Health check échoué');
-        const data = await res.json();
+    const data = await adminFetch(`/admin/health`);
         const missing = Object.entries(data.tables).filter(([k,v]) => !v).map(([k])=>k);
         const counts = data.counts || {};
         const lines = [];
@@ -394,9 +411,7 @@ async function handleRebuildDb() {
     if (!confirm('Recréer le schéma si nécessaire ?')) return;
     rebuildDbBtn.disabled = true; const original = rebuildDbBtn.textContent; rebuildDbBtn.textContent='...';
     try {
-    const res = await fetch(`${API_BASE_URL}/admin/rebuild`, { method:'POST', headers: getAdminHeaders() });
-        if (!res.ok) throw new Error('Erreur reconstruction');
-        const data = await res.json();
+    const data = await adminFetch(`/admin/rebuild`, { method:'POST' });
         showMessage(data.message || 'Schéma OK', 'success');
         handleDbHealthCheck();
     } catch (e) {
@@ -416,9 +431,7 @@ async function handleImportJson(evt) {
         let json;
         try { json = JSON.parse(text); } catch { throw new Error('JSON invalide'); }
         importStatusBox.textContent='Envoi vers le serveur...';
-    const res = await fetch(`${API_BASE_URL}/admin/import`, { method:'POST', headers: getAdminHeaders({'Content-Type':'application/json'}), body: JSON.stringify(json) });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur import');
+    const data = await adminFetch(`/admin/import`, { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(json) });
         importStatusBox.className='import-status success';
         importStatusBox.textContent=`Import terminé: ${data.counts.albums} albums, ${data.counts.lists} listes.`;
         loadAlbums();
