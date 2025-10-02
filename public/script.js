@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (refreshLogsBtn) refreshLogsBtn.addEventListener('click', handleRefreshLogs);
         if (logsLimitSelect) logsLimitSelect.addEventListener('change', handleRefreshLogs);
     loadStatus();
+    initAdminDebug();
 });
 
 function initTheme() {
@@ -351,6 +352,41 @@ function resetYearFilter() {
     yearExact = null;
     if (yearFilterInput) yearFilterInput.value = '';
     renderAlbums();
+}
+
+// ================= ADMIN DEBUG TOKEN =================
+function initAdminDebug() {
+    const input = document.getElementById('adminTokenInput');
+    const saveBtn = document.getElementById('saveAdminTokenBtn');
+    const clearBtn = document.getElementById('clearAdminTokenBtn');
+    const testBtn = document.getElementById('testAdminExportBtn');
+    const status = document.getElementById('adminDebugStatus');
+    if (!input || !saveBtn || !clearBtn || !testBtn) return; // section absente
+    // Prefill
+    const current = localStorage.getItem('ml-admin-token') || '';
+    if (current) input.value = current;
+    function setStatus(msg, type='info') {
+        if (!status) return; status.textContent = msg; status.className='admin-debug-status '+type;
+    }
+    saveBtn.addEventListener('click', () => {
+        const v = input.value.trim();
+        if (!v) { setStatus('Token vide', 'error'); return; }
+        localStorage.setItem('ml-admin-token', v);
+        setStatus('Token enregistré en localStorage', 'ok');
+    });
+    clearBtn.addEventListener('click', () => {
+        localStorage.removeItem('ml-admin-token');
+        setStatus('Token supprimé', 'ok');
+    });
+    testBtn.addEventListener('click', async () => {
+        setStatus('Test export…');
+        try {
+            const data = await adminFetch('/admin/export');
+            setStatus('OK export reçu (' + (data.albums ? data.albums.length : 0) + ' albums)', 'ok');
+        } catch (e) {
+            setStatus('Échec: ' + e.message, 'error');
+        }
+    });
 }
 
 // Si l'utilisateur ne voit pas l'onglet Administration, ajout d'un bouton discret dans la barre d'outils albums

@@ -168,6 +168,17 @@
                             <option value="500">500</option>
                         </select>
                     </div>
+                    <details class="admin-debug" style="margin:1rem 0;">
+                        <summary>Debug Admin / Token</summary>
+                        <div class="admin-debug-body">
+                            <label style="display:block; margin-bottom:.3rem;">Token admin (x-admin-token)</label>
+                            <input type="text" id="adminTokenInput" placeholder="ADMIN_TOKEN" style="width:260px;"> 
+                            <button id="saveAdminTokenBtn" class="btn-ghost" type="button">Enregistrer token</button>
+                            <button id="clearAdminTokenBtn" class="btn-ghost" type="button">Retirer token</button>
+                            <button id="testAdminExportBtn" class="btn-ghost" type="button">Test export direct</button>
+                            <div id="adminDebugStatus" style="margin-top:.5rem; font-size:.85rem; opacity:.9;"></div>
+                        </div>
+                    </details>
                     <div id="dbHealthSummary" class="db-health" style="display:none;"></div>
                     <div id="importStatus" class="import-status" style="display:none;"></div>
                     <div id="logsPanel" class="logs-panel" style="display:none;">
