@@ -423,25 +423,48 @@ app.post('/api/admin/import', (req, res) => {
         return res.status(400).json({ error: 'Format JSON invalide' });
     }
     const isPg = dbLayer.driver === 'pg';
-    function exec(sql, params=[]) { return new Promise((resolve,reject)=> dbLayer.run(sql, params, function(err){ return err?reject(err):resolve(this); })); }
+    function exec(sql, params = []) { return new Promise((resolve, reject) => dbLayer.run(sql, params, function (err) { return err ? reject(err) : resolve(this); })); }
+
+    // Stratégie: on ne préserve pas les IDs sources (car trous possibles) => on construit un mapping.
+    // Cela évite les violations FK quand l'export contenait des IDs clairsemés (ex: listes 1,2,5 => Postgres recrée 1,2,3).
+    // Mapping: sourceId -> newId
     (async () => {
         if (isPg) await exec('BEGIN');
+        const albumIdMap = {}; // old -> new
+        const listIdMap = {}; // old -> new
         try {
+            // Albums
             for (const a of al) {
-                await exec(`INSERT INTO albums (release_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`, [a.release_id, a.artist_name, a.album_title, a.release_year, a.genre, a.style, a.label, a.cover_image_url, a.created_at || new Date().toISOString(), a.updated_at || new Date().toISOString()]);
+                const ctx = await exec(`INSERT INTO albums (release_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`, [a.release_id, a.artist_name, a.album_title, a.release_year, a.genre, a.style, a.label, a.cover_image_url, a.created_at || new Date().toISOString(), a.updated_at || new Date().toISOString()]);
+                if (a.id !== undefined) albumIdMap[a.id] = ctx.lastID; // ctx.lastID défini pour les deux drivers
             }
+            // Listes
             for (const l of ls) {
-                await exec(`INSERT INTO lists (name, description, created_at) VALUES (?,?,?)`, [l.name, l.description, l.created_at || new Date().toISOString()]);
+                const ctx = await exec(`INSERT INTO lists (name, description, created_at) VALUES (?,?,?)`, [l.name, l.description, l.created_at || new Date().toISOString()]);
+                if (l.id !== undefined) listIdMap[l.id] = ctx.lastID;
             }
+            // Items de liste (remap list_id & album_id)
             for (const x of li) {
-                await exec(`INSERT INTO list_items (list_id, album_id, position) VALUES (?,?,?)`, [x.list_id, x.album_id, x.position]);
+                const mappedListId = listIdMap.hasOwnProperty(x.list_id) ? listIdMap[x.list_id] : x.list_id;
+                const mappedAlbumId = albumIdMap.hasOwnProperty(x.album_id) ? albumIdMap[x.album_id] : x.album_id;
+                if (!mappedListId || !mappedAlbumId) {
+                    throw new Error(`Référence introuvable pour list_item (list_id=${x.list_id}=>${mappedListId}, album_id=${x.album_id}=>${mappedAlbumId})`);
+                }
+                await exec(`INSERT INTO list_items (list_id, album_id, position) VALUES (?,?,?)`, [mappedListId, mappedAlbumId, x.position]);
             }
+            // Tags (remap list_id)
             for (const t of lt) {
-                await exec(`INSERT INTO list_tags (list_id, tag) VALUES (?,?)`, [t.list_id, t.tag]);
+                const mappedListId = listIdMap.hasOwnProperty(t.list_id) ? listIdMap[t.list_id] : t.list_id;
+                if (!mappedListId) throw new Error(`Référence introuvable pour tag (list_id=${t.list_id})`);
+                await exec(`INSERT INTO list_tags (list_id, tag) VALUES (?,?)`, [mappedListId, t.tag]);
             }
             if (isPg) await exec('COMMIT');
             logOperation('admin.import', 'admin', null, { counts: { albums: al.length, lists: ls.length, list_items: li.length, list_tags: lt.length } });
-            res.json({ message: 'Import terminé', counts: { albums: al.length, lists: ls.length, list_items: li.length, list_tags: lt.length } });
+            res.json({
+                message: 'Import terminé',
+                counts: { albums: al.length, lists: ls.length, list_items: li.length, list_tags: lt.length },
+                remapped: { albums: Object.keys(albumIdMap).length, lists: Object.keys(listIdMap).length }
+            });
         } catch (e) {
             if (isPg) await exec('ROLLBACK');
             res.status(500).json({ error: e.message });

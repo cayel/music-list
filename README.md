@@ -1,6 +1,6 @@
 # Music List App
 
-Application web légère pour gérer une collection d'albums avec intégration Discogs, listes classées, tags, statistiques visuelles et journal des opérations.
+Application web légère pour gérer une collection d'albums avec intégration Discogs, listes classées, tags, statistiques visuelles et journal des opérations. Fonctionne en **SQLite (local / simple)** ou **Postgres (hébergement cloud sans disque persistant)** via une couche d'abstraction automatique.
 
 ## Fonctionnalités principales
 
@@ -14,7 +14,7 @@ Application web légère pour gérer une collection d'albums avec intégration D
 - 🪵 Journalisation de chaque action (albums, listes, items, tags, admin) avec catégories colorées
 - 📊 Page Statistiques avec graphiques (distribution annuelle, genres/styles) en Canvas
 - �️ Modal plein écran sur clic pochette (détails + lien Discogs)
-- 💾 SQLite local (schéma auto-créé, intégrité référentielle)
+- 💾 Base locale SQLite (schéma auto-créé, intégrité référentielle) OU Postgres (auto-détection)
 - 🎨 Thème clair/sombre avec palette acier/bleu
 
 Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre (supprimé), rafraîchissement global massif (endpoint supprimé), pagination.
@@ -50,6 +50,40 @@ Schéma reconstruit automatiquement si manquant (endpoint /admin/rebuild).
 5. Ouvrez votre navigateur sur `http://localhost:3000`
 
 Optionnel : ajoutez `DISCOGS_TOKEN=<votre_token>` dans `.env` pour de meilleures métadonnées.
+
+### Variables d'environnement principales
+
+| Variable | Rôle | Exemple |
+|----------|------|---------|
+| PORT | Port d'écoute local | 3000 |
+| DISCOGS_TOKEN | Token Discogs (optionnel) | abc123... |
+| ADMIN_TOKEN | Protège les endpoints /api/admin/* | unsecretfort |
+| DB_PATH | (SQLite) Chemin fichier DB | ./music_collection.db |
+| PG_CONNECTION_STRING | Chaîne de connexion Postgres (prioritaire) | postgres://user:pass@host:5432/dbname |
+| DATABASE_URL | Alias Heroku/Render (si PG_CONNECTION_STRING absent) | postgres://... |
+
+Si `PG_CONNECTION_STRING` **ou** `DATABASE_URL` est défini, le driver Postgres est utilisé. Sinon, SQLite.
+
+### Choix automatique du driver
+
+1. Detect: si variable PG présente ⇒ driver = `pg`
+2. Sinon ⇒ driver = `sqlite`
+3. Le schéma est créé automatiquement dans les deux cas (tables `albums`, `lists`, `list_items`, `list_tags`, `operation_logs`).
+
+### Import / Remapping des IDs (Postgres)
+
+Lors d'un import JSON:
+- En SQLite, les IDs réinsérés suivent et peuvent correspondre aux anciens si la séquence est alignée.
+- En Postgres, les colonnes sont en `SERIAL`; les IDs sont régénérés. Le code construit donc un **mapping ancienID → nouvelID** pour:
+   - `albums`
+   - `lists`
+   - Puis réécrit `list_items.list_id`, `list_items.album_id` et `list_tags.list_id` avant insertion.
+
+Conséquence:
+- Les IDs internes peuvent changer après migration vers Postgres, mais les relations restent cohérentes.
+- Le champ `release_id` (Discogs) reste stable et peut servir d'identifiant fonctionnel.
+
+En cas de référence introuvable durant l'import, la transaction (Postgres) est annulée et une erreur claire est renvoyée.
 
 ## Mode d'emploi rapide
 
@@ -137,22 +171,59 @@ localStorage.setItem('ml-admin-token', 'VOTRE_TOKEN');
 ```
 Puis recharger la page.
 
-### Déploiement sur Render (exemple)
+### Déploiement sur Render
 
-Un fichier `render.yaml` est fourni. Étapes :
-1. Créer un nouveau service Web (Node) sur Render et connecter le repo.
-2. Build command: `npm install` ; Start command: `node server.js`.
-3. Ajouter un disque persistant (ex: 1GB) monté sur `/var/data` et définir `DB_PATH=/var/data/music_collection.db`.
-4. Définir les variables d'environnement sensibles dans le dashboard : `DISCOGS_TOKEN`, `ADMIN_TOKEN`.
-5. Déployer. Le serveur écoute `PORT` fourni par Render automatiquement.
+Deux approches :
+
+1. (Ancien) SQLite + disque persistant (payant au-delà du free tier) – non recommandé désormais.
+2. (Recommandé) Postgres managé (gratuit sur certains tiers) + import JSON.
+
+#### Option Postgres (recommandée)
+
+1. Créer une base Postgres (Render, Neon, Supabase...).
+2. Récupérer la chaîne de connexion (ex: `postgres://user:pass@host:5432/dbname`).
+3. Dans Render (service Web Node) définir les variables:
+   - `PG_CONNECTION_STRING=<votre_url>`
+   - `DISCOGS_TOKEN=<token>` (optionnel)
+   - `ADMIN_TOKEN=<secret>` (fortement conseillé)
+4. Build command: `npm install`
+5. Start command: `node server.js`
+6. Déployer : le schéma est créé automatiquement.
+7. (Migration) Depuis l'ancienne instance: `GET /api/admin/export` puis `POST /api/admin/import` sur la nouvelle (remapping auto des IDs).
+
+Avantages: pas de disque à gérer, scalabilité plus simple, pas de corruption possible en cas de restart.
+
+#### Option SQLite (legacy / local)
+
+1. Conserver `DB_PATH` (ou laisser par défaut `./music_collection.db`).
+2. Pour Render: nécessiterait un disque persistant défini dans `render.yaml` (voir version précédente). Non indispensable si passage à Postgres.
+
+#### SSL Postgres
+
+Le code active automatiquement `ssl: { rejectUnauthorized: false }` pour certaines plateformes (Render, Neon, Supabase) si la chaîne contient leur domaine.
+
+### Migration rapide SQLite → Postgres
+
+1. Sur l'ancienne instance (SQLite) : Télécharger l'export via `/api/admin/export`.
+2. Déployer la nouvelle instance avec `PG_CONNECTION_STRING`.
+3. Ouvrir l'onglet Administration et importer le JSON.
+4. Vérifier `/api/admin/health` et l'intégrité des listes.
+5. Optionnel: supprimer l'ancien service/disque.
+
+### Limitations actuelles
+
+- Pas de conservation stricte des IDs d'origine en Postgres (design volontaire pour éviter collisions/séquence).
+- Pas encore d'index spécifiques sur `release_year` ou `list_items(list_id, position)` (suffisant pour volume modéré < ~50k entrées). Ajouter si besoin.
 
 ### Améliorations possibles (TODO)
 
 - Authentification plus avancée (RBAC, sessions)
 - Pagination / chargement progressif des logs
+- Index DB (année, positions) si croissance importante
 - Filtrage/tooltip interactif des charts
 - Sauvegarde préférences utilisateur (vue mosaïque, etc.)
 - Export partiel (sélection de listes seulement)
+- Endpoint de recherche/fusion d'albums en doublon
 
 ## Contribution
 
