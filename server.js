@@ -351,28 +351,44 @@ app.put('/api/lists/:id/items/order', (req, res) => {
     dbLayer.all(`SELECT id FROM list_items WHERE list_id=? AND id IN (${placeholders})`, [id, ...order], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         if (rows.length !== order.length) return res.status(400).json({ error: 'Items invalides' });
-        dbLayer.run('BEGIN TRANSACTION');
-        dbLayer.run('UPDATE list_items SET position=position+1000 WHERE list_id=?', [id], (bErr) => {
-            if (bErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: bErr.message }); }
-            let remaining = order.length; let failed = false;
-            order.forEach((liId, idx) => {
-                dbLayer.run('UPDATE list_items SET position=? WHERE id=?', [idx + 1, liId], (uErr) => {
-                    if (failed) return;
-                    if (uErr) { failed = true; dbLayer.run('ROLLBACK'); return res.status(500).json({ error: uErr.message }); }
-                    remaining--;
-                    if (!remaining) {
-                        dbLayer.run('COMMIT', (cErr) => {
-                            if (cErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: cErr.message }); }
-                            dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
-                                if (fErr) return res.status(500).json({ error: fErr.message });
-                                logOperation('list_item.reorder', 'list', id, { count: ordered.length });
-                                res.json({ message: 'Ordre mis à jour', items: ordered });
-                            });
-                        });
-                    }
+        if (dbLayer.driver === 'pg') {
+            // Construction d'un seul UPDATE atomique
+            // UPDATE list_items SET position = CASE id WHEN ? THEN 1 WHEN ? THEN 2 ... END WHERE list_id=? AND id IN (..)
+            const caseWhens = order.map((_, i) => 'WHEN ? THEN ' + (i + 1)).join(' ');
+            const sql = `UPDATE list_items SET position = CASE id ${caseWhens} END WHERE list_id=? AND id IN (${placeholders})`;
+            const params = [...order, id, ...order];
+            dbLayer.run(sql, params, (uErr) => {
+                if (uErr) return res.status(500).json({ error: uErr.message });
+                dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
+                    if (fErr) return res.status(500).json({ error: fErr.message });
+                    logOperation('list_item.reorder', 'list', id, { count: ordered.length });
+                    res.json({ message: 'Ordre mis à jour', items: ordered });
                 });
             });
-        });
+        } else {
+            dbLayer.run('BEGIN TRANSACTION');
+            dbLayer.run('UPDATE list_items SET position=position+1000 WHERE list_id=?', [id], (bErr) => {
+                if (bErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: bErr.message }); }
+                let remaining = order.length; let failed = false;
+                order.forEach((liId, idx) => {
+                    dbLayer.run('UPDATE list_items SET position=? WHERE id=?', [idx + 1, liId], (uErr) => {
+                        if (failed) return;
+                        if (uErr) { failed = true; dbLayer.run('ROLLBACK'); return res.status(500).json({ error: uErr.message }); }
+                        remaining--;
+                        if (!remaining) {
+                            dbLayer.run('COMMIT', (cErr) => {
+                                if (cErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: cErr.message }); }
+                                dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
+                                    if (fErr) return res.status(500).json({ error: fErr.message });
+                                    logOperation('list_item.reorder', 'list', id, { count: ordered.length });
+                                    res.json({ message: 'Ordre mis à jour', items: ordered });
+                                });
+                            });
+                        }
+                    });
+                });
+            });
+        }
     });
 });
 
