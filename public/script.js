@@ -60,6 +60,7 @@ const discogsHelpEl = document.getElementById('discogsHelp');
 const envBadgeEl = document.getElementById('envBadge');
 const envBadgeGlobalEl = document.getElementById('envBadgeGlobal');
 const appVersionEl = document.getElementById('appVersion');
+const footerVersionEl = document.getElementById('footerVersion');
 // Listes
 let lists = [];
 const listsContainer = document.getElementById('listsContainer');
@@ -175,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     appVersionEl.textContent = parts.join(' • ');
                     appVersionEl.style.display = 'inline-block';
                     appVersionEl.title = 'Version application';
+                    if (footerVersionEl) footerVersionEl.textContent = appVersionEl.textContent;
                 }
             }
             // Refresh uptime every 10s
@@ -403,8 +405,10 @@ async function deleteAlbum(albumId) {
 // Indicateur de chargement pour la grille d'albums
 function showLoading() {
     if (albumsContainer) {
-        albumsContainer.style.display='block';
-        albumsContainer.innerHTML = '<div class="loading">Chargement des albums…</div>';
+        albumsContainer.style.display='grid';
+        const skeletonCount = 8;
+        const tiles = Array.from({length:skeletonCount}).map(()=>'<div class="skeleton-tile"><div class="skeleton-shimmer"></div></div>').join('');
+        albumsContainer.innerHTML = `<div class="skeleton-grid">${tiles}</div>`;
     }
     if (emptyState) emptyState.style.display='none';
 }
@@ -1369,10 +1373,6 @@ function drawYearChart(yearDist) {
     grd.addColorStop(1, accentFade);
     ctx.fillStyle = grd;
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, barW, barH, 3) : ctx.rect(x,y,barW,barH); ctx.fill();
-    // Outline to increase contrast
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
     if (last.length <= 16 || i % 2 === 0) {
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim') || '#555';
       ctx.save();
