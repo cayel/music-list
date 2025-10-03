@@ -54,6 +54,8 @@ const statTagsMeta = document.getElementById('statTagsMeta');
 const discogsStatusBadge = document.getElementById('discogsStatus');
 const serverPortEl = document.getElementById('serverPort');
 const serverUptimeEl = document.getElementById('serverUptime');
+const dbDriverEl = document.getElementById('dbDriver');
+const dbLocationEl = document.getElementById('dbLocation');
 // Listes
 let lists = [];
 const listsContainer = document.getElementById('listsContainer');
@@ -118,6 +120,47 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
     initAdminDebug();
 });
+
+    async function loadStatus() {
+        try {
+            const res = await fetch(`${API_BASE_URL}/status`);
+            if (!res.ok) throw new Error('HTTP '+res.status);
+            const data = await res.json();
+            statusInfo = data;
+            if (discogsStatusBadge) {
+                const has = !!data.discogsToken;
+                discogsStatusBadge.textContent = has ? 'Présent' : 'Absent';
+                discogsStatusBadge.className = 'badge ' + (has ? 'badge-success' : 'badge-warning');
+            }
+            if (serverPortEl && data.port) serverPortEl.textContent = String(data.port);
+            if (serverUptimeEl && typeof data.uptime === 'number') serverUptimeEl.textContent = formatUptime(data.uptime);
+            if (data.db) {
+                if (dbDriverEl) dbDriverEl.textContent = data.db.driver || '–';
+                if (dbLocationEl) dbLocationEl.textContent = data.db.location || '–';
+            }
+            // Refresh uptime every 10s
+            if (!loadStatus._interval && serverUptimeEl) {
+                loadStatus._interval = setInterval(()=>{
+                    if (statusInfo && typeof statusInfo.uptime === 'number') {
+                        statusInfo.uptime += 10;
+                        serverUptimeEl.textContent = formatUptime(statusInfo.uptime);
+                    }
+                }, 10000);
+            }
+        } catch (e) {
+            if (discogsStatusBadge) {
+                discogsStatusBadge.textContent = 'Erreur';
+                discogsStatusBadge.className = 'badge badge-error';
+            }
+        }
+    }
+
+    function formatUptime(s) {
+        const d = Math.floor(s/86400);
+        const h = Math.floor((s%86400)/3600);
+        const m = Math.floor((s%3600)/60);
+        if (d>0) return `${d}j ${h}h`; if (h>0) return `${h}h${m}m`; return `${m}m`; 
+    }
 
 // ====== FILTRE ALBUMS (manquants restaurés) ======
 function handleAlbumFilterInput(e) {

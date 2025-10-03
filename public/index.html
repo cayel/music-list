@@ -46,26 +46,7 @@
                     <div id="message" class="message" role="status" aria-live="polite"></div>
                 </section>
 
-                <section class="card status-card">
-                    <div class="card-header compact">
-                        <h3>État de l'intégration</h3>
-                    </div>
-                    <dl class="status-list">
-                        <div>
-                            <dt>Discogs Token</dt>
-                            <dd id="discogsStatus" class="badge badge-pending">Vérification…</dd>
-                        </div>
-                        <div>
-                            <dt>Port serveur</dt>
-                            <dd id="serverPort">–</dd>
-                        </div>
-                        <div>
-                            <dt>Uptime</dt>
-                            <dd id="serverUptime">–</dd>
-                        </div>
-                    </dl>
-                    <p class="status-help">Ajoutez <code>DISCOGS_TOKEN</code> dans <code>.env</code> pour améliorer la qualité des recherches.</p>
-                </section>
+                
 
                 <section class="card tips-card">
                     <div class="card-header compact">
@@ -150,6 +131,32 @@
                     <div class="section-heading">
                         <h2>Administration</h2>
                         <p class="section-subtitle">Outils internes (export JSON)</p>
+                    </div>
+                    <div class="integration-status card" id="integrationStatusCard" style="margin-bottom:1rem;">
+                        <div class="card-header compact"><h3>État de l'intégration</h3></div>
+                        <dl class="status-list inline-status">
+                            <div>
+                                <dt>Discogs Token</dt>
+                                <dd id="discogsStatus" class="badge badge-pending">Vérification…</dd>
+                            </div>
+                            <div>
+                                <dt>Port</dt>
+                                <dd id="serverPort">–</dd>
+                            </div>
+                            <div>
+                                <dt>Uptime</dt>
+                                <dd id="serverUptime">–</dd>
+                            </div>
+                            <div>
+                                <dt>Type DB</dt>
+                                <dd id="dbDriver">–</dd>
+                            </div>
+                            <div style="flex:1 1 100%; max-width:100%;">
+                                <dt>Emplacement DB</dt>
+                                <dd id="dbLocation" style="max-width:420px; overflow-wrap:anywhere;">–</dd>
+                            </div>
+                        </dl>
+                        <p class="status-help">Ajoutez <code>DISCOGS_TOKEN</code> dans <code>.env</code> pour de meilleures limites API.</p>
                     </div>
                     <div class="admin-tools">
                         <button id="checkDbHealthBtn" class="btn-ghost">Vérifier la base</button>

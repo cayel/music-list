@@ -40,6 +40,8 @@ header.app-header { margin-bottom:34px; }
 .status-list dt { font-weight:600; color:var(--text-soft); font-size:.85rem; }
 .status-list dd { margin:0; font-weight:600; color:var(--text); font-size:.95rem; }
 .status-help { margin-top:12px; font-size:.85rem; color:var(--text-soft); line-height:1.4; }
+.inline-status { flex-direction:row; flex-wrap:wrap; }
+.inline-status div { min-width:140px; }
 .tips-card p { margin:0; color:var(--text-soft); line-height:1.55; }
 
 .badge { display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; border-radius:999px; font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid transparent; }

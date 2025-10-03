@@ -35,13 +35,28 @@ if (!DISCOGS_TOKEN) {
     console.warn('[Discogs] Aucun DISCOGS_TOKEN défini. Ajoutez-le dans .env pour des limites plus larges.');
 }
 
-app.get('/api/status', (req, res) => {
-    res.json({ discogsToken: !!DISCOGS_TOKEN, uptime: process.uptime(), timestamp: new Date().toISOString() });
-});
-
 const dbLayer = require('./db');
 let dbReady = false;
 dbLayer.init().then(()=>{ dbReady = true; console.log('[DB] Initialisée driver=' + dbLayer.driver); }).catch(e => { console.error('Init DB échouée', e); process.exit(1); });
+
+app.get('/api/status', (req, res) => {
+    const db = { driver: dbLayer.driver };
+    if (dbLayer.driver === 'sqlite') {
+        db.location = DB_PATH;
+    } else {
+        try {
+            const conn = process.env.PG_CONNECTION_STRING || process.env.DATABASE_URL || '';
+            if (conn) {
+                const url = new URL(conn.replace(/^postgres:\/\//,'postgresql://'));
+                const host = url.hostname;
+                const port = url.port || '5432';
+                const dbname = url.pathname.replace(/^\//,'');
+                db.location = `${host}:${port}/${dbname}`;
+            }
+        } catch { /* ignore */ }
+    }
+    res.json({ discogsToken: !!DISCOGS_TOKEN, uptime: process.uptime(), timestamp: new Date().toISOString(), db, port: PORT });
+});
 
 function logOperation(action, entityType, entityId, infoObj) {
     let info = null;
