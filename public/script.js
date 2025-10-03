@@ -56,6 +56,7 @@ const serverPortEl = document.getElementById('serverPort');
 const serverUptimeEl = document.getElementById('serverUptime');
 const dbDriverEl = document.getElementById('dbDriver');
 const dbLocationEl = document.getElementById('dbLocation');
+const discogsHelpEl = document.getElementById('discogsHelp');
 // Listes
 let lists = [];
 const listsContainer = document.getElementById('listsContainer');
@@ -131,6 +132,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const has = !!data.discogsToken;
                 discogsStatusBadge.textContent = has ? 'Présent' : 'Absent';
                 discogsStatusBadge.className = 'badge ' + (has ? 'badge-success' : 'badge-warning');
+                if (discogsHelpEl) {
+                    if (has) {
+                        discogsHelpEl.innerHTML = 'Token Discogs actif – limites étendues.';
+                    } else {
+                        discogsHelpEl.innerHTML = 'Ajoutez <code>DISCOGS_TOKEN</code> dans <code>.env</code> pour de meilleures limites API.';
+                    }
+                }
             }
             if (serverPortEl && data.port) serverPortEl.textContent = String(data.port);
             if (serverUptimeEl && typeof data.uptime === 'number') serverUptimeEl.textContent = formatUptime(data.uptime);
