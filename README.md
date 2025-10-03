@@ -5,17 +5,20 @@ Application web légère pour gérer une collection d'albums avec intégration D
 ## Fonctionnalités principales
 
 - 🎵 Ajout d'albums par numéro de release Discogs
-- 🔄 Rafraîchissement des métadonnées d'un album (ciblé) depuis Discogs
-- 📚 Visualisation en grille mosaïque (overlay minimal) et filtre texte + année
-- 🧾 Listes classées avec réordonnancement par glisser-déposer
-- 🏷️ Tags de listes (ajout/suppression) + compteur d'utilisation
-- 🗑️ Suppression protégée (impossible si l'album est dans une liste)
-- 🛠️ Administration : export JSON, import, santé/rebuild de la base, journal coloré des opérations
-- 🪵 Journalisation de chaque action (albums, listes, items, tags, admin) avec catégories colorées
-- 📊 Page Statistiques avec graphiques (distribution annuelle, genres/styles) en Canvas
-- �️ Modal plein écran sur clic pochette (détails + lien Discogs)
-- 💾 Base locale SQLite (schéma auto-créé, intégrité référentielle) OU Postgres (auto-détection)
-- 🎨 Thème clair/sombre avec palette acier/bleu
+- 🔄 Rafraîchissement ciblé des métadonnées d'un album depuis Discogs
+- 📚 Grille mosaïque responsive (filtre texte + année exacte) + vue compacte
+- 🧾 Listes classées avec réordonnancement par glisser-déposer (algorithmes adaptés SQLite / Postgres)
+- 🏷️ Tags de listes (ajout / suppression) + compteur d'utilisation consolidé
+- 🗑️ Suppression protégée (refus si l'album apparaît dans au moins une liste)
+- 🛠️ Administration : export JSON, import transactionnel (remapping IDs + skip doublons), rebuild, santé, panneau statut système
+- 🪵 Journalisation structurée (albums, listes, items, tags, admin) avec coloration par catégorie
+- 📊 Statistiques (distribution des années, genres/styles) générées côté client (Canvas)
+- 🖼️ Modal plein écran enrichi (zoom pochette, détails, lien Discogs, bouton « copier release ID »)
+- 🩺 Panneau Système : métriques process, taille DB, counts, version + hash git (/api/admin/system)
+- 💾 Multi-base : SQLite (local) OU Postgres (auto-détection + migration facile)
+- 🔐 Protection optionnelle des endpoints admin par jeton
+- 🏷️ Badges d'environnement & version (package.json + hash git courts) en header / footer
+- 🎨 Thème clair/sombre acier/bleu
 
 Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre (supprimé), rafraîchissement global massif (endpoint supprimé), pagination.
 
@@ -27,7 +30,7 @@ Listes : `name`, `description`, items ordonnés (table séparée), tags (table r
 
 Journal (`operation_logs`) : `action`, `entity_type`, `entity_id`, `info` (JSON), `created_at`.
 
-Schéma reconstruit automatiquement si manquant (endpoint /admin/rebuild).
+Schéma reconstruit automatiquement si manquant (endpoint /admin/rebuild). Les listes et items sont toujours cohérents via clés étrangères; les positions sont normalisées par les algorithmes de réordonnancement (voir plus bas).
 
 ## Installation & démarrage
 
@@ -70,7 +73,7 @@ Si `PG_CONNECTION_STRING` **ou** `DATABASE_URL` est défini, le driver Postgres 
 2. Sinon ⇒ driver = `sqlite`
 3. Le schéma est créé automatiquement dans les deux cas (tables `albums`, `lists`, `list_items`, `list_tags`, `operation_logs`).
 
-### Import / Remapping des IDs (Postgres)
+### Import / Remapping des IDs (Postgres) + déduplication
 
 Lors d'un import JSON:
 - En SQLite, les IDs réinsérés suivent et peuvent correspondre aux anciens si la séquence est alignée.
@@ -83,7 +86,16 @@ Conséquence:
 - Les IDs internes peuvent changer après migration vers Postgres, mais les relations restent cohérentes.
 - Le champ `release_id` (Discogs) reste stable et peut servir d'identifiant fonctionnel.
 
-En cas de référence introuvable durant l'import, la transaction (Postgres) est annulée et une erreur claire est renvoyée.
+Lors de l'import, si un album avec le même `release_id` existe déjà, il est **ignoré proprement** (skipped) pour éviter les violations d'unicité, et les items/tags associés pointent vers l'album existant (mise à jour du mapping). En cas de référence introuvable durant l'import, la transaction (Postgres) est annulée et une erreur claire est renvoyée.
+
+### Réordonnancement (Listes)
+
+Deux stratégies afin d'assurer un ordre stable sans collisions :
+
+1. Postgres : mise à jour atomique par CTE + `unnest()` générant un `UPDATE ... FROM` unique avec `CASE` implicite (évite les contraintes uniques temporaires et garantit isolation).
+2. SQLite : approche en deux phases – assignation temporaire de positions négatives (décale l'espace), puis réécriture séquentielle positive normalisée. Gère les réordonnancements partiels et les doublons d'IDs fournis par erreur.
+
+L'API accepte donc un sous-ensemble d'IDs; les éléments omis conservent leur ordre relatif après ceux spécifiés.
 
 ## Mode d'emploi rapide
 
@@ -93,6 +105,9 @@ En cas de référence introuvable durant l'import, la transaction (Postgres) est
 4. Passer en onglet Listes : créer une liste, ajouter des albums (auto-complétion locale ou releaseId), activer le mode édition pour réordonner.
 5. Ajouter des tags de liste pour le regroupement (affichage badge + stats de tags).
 6. Clic pochette ➜ modal détail + lien Discogs.
+   - Zoom : clic sur l'image agrandit / réduit (classe CSS `.zoomed`).
+   - Copie release ID : bouton dédié (feedback visuel via changement de label).
+   - Lien direct Discogs (nouvel onglet).
 7. Onglet Statistiques ➜ visualiser graphiques (années, genres/styles) calculés côté client.
 8. Onglet Administration ➜ exporter/importer JSON, vérifier ou reconstruire la base, consulter le journal.
 
@@ -124,6 +139,117 @@ music-list/
 └── README.md          # Ce fichier
 ```
 
+## Architecture
+
+### Vue d'ensemble
+
+L'application est volontairement minimaliste (zéro framework front) mais structurée autour de quelques blocs nets :
+
+```
+[ Navigateur ]
+    |  (fetch JSON / REST, assets statiques)
+    v
+[ Express (server.js) ] --(axios)--> [ Discogs API ]
+    |\
+    | \--(db.js: abstraction SQL)--> [ SQLite ]
+    |                                 [ Postgres ]
+    |--(logging)--> operation_logs (auditable)
+    |--(metrics)--> /api/status & /api/admin/system
+```
+
+### Couches
+- Présentation : fichiers statiques dans `public/` servis par Express.
+- API REST : routes définies dans `server.js` (albums, listes, tags, admin, système).
+- Accès Données : module `db.js` unifie SQLite / Postgres (conversion placeholders `?` → `$n`, création schéma, helpers `run/get/all`).
+- Intégration Externe : Discogs via `axios` (ajout / rafraîchissement d'albums). Cache côté DB uniquement (pas de layer mémoire pour rester stateless).
+- Journal & Observabilité : table `operation_logs`, endpoints `/api/status`, `/api/admin/health`, `/api/admin/system`.
+
+### Flux principaux
+
+1. Ajout d'un album
+   1. Front envoie `POST /api/albums { releaseId }`.
+   2. Serveur vérifie présence locale (unicité `release_id`).
+   3. Si absent : requête Discogs (token si disponible) → normalisation (genres/styles concaténés).
+   4. Insertion + ligne de log `album.add`.
+   5. Réponse JSON (album enrichi) → rendu dynamique.
+
+2. Réordonnancement d'une liste
+   - Reçoit tableau partiel d'IDs (ordre utilisateur). 
+   - Postgres : update unique via CTE + `unnest()`.
+   - SQLite : phase négative (libère contraintes) puis réindexation séquentielle.
+   - Log `list_items.reorder` (optionnel selon implémentation actuelle).
+
+3. Import JSON
+   - Parse → préparation mapping.
+   - Précharge release_ids existants (évite doublons : skip + mapping).
+   - Postgres : transaction complète (albums → lists → list_items/tags remappés). Rollback sur incohérence.
+   - SQLite : séquence d'inserts (pas de transaction globale volontaire pour simplicité, mais cohérence assurée par remapping et contraintes FK).
+   - Logs agrégés (compteurs d'ajout). 
+
+4. Panneau Système
+   - `GET /api/admin/system` collecte : version app, hash git, process (RSS, heap), uptime, counts entités, taille DB (fichier ou pg_relation_size agrégée), volume logs 24h.
+
+### Modèle de données (résumé)
+```
+albums(id, release_id UNIQUE, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at)
+lists(id, name, description, created_at)
+list_items(id, list_id FK, album_id FK, position INT, created_at)
+list_tags(id, list_id FK, tag TEXT, created_at)
+operation_logs(id, action, entity_type, entity_id, info JSON, created_at)
+```
+Index implicites : clés primaires + unique release_id. (Indices supplémentaires à ajouter si croissance.)
+
+### Stratégie de positions
+Assure séquence compacte (1…N) :
+- Postgres : update atomique évitant collisions.
+- SQLite : repositionnement temporaire négatif puis normalisation ascendante.
+Gère : envoi partiel, doublons d'IDs fournis, grands déplacements.
+
+### Gestion erreurs & codes
+- Unicité (release déjà présent ou item dupliqué dans une liste) → 409.
+- Entrée invalide / format import → 400.
+- Discogs injoignable → 502 (ou 500 fallback minimaliste si non distingué selon version).
+- Ressource absente → 404.
+
+### Journalisation
+Chaque mutation écrit une ligne contextualisée (info JSON compacte). Permet audit, diagnostics post-mortem et métriques simples (compte actions sur 24h).
+
+### Sécurité
+- Admin protégés via header `x-admin-token` si `ADMIN_TOKEN` défini.
+- Pas d'auth utilisateur finale (use-case collection personnelle). Extension possible : ajouter table `users` + scope tokens.
+
+### Version & Environnement
+- Version lit `package.json` + hash git court (commande synchrone). Exposés dans `/api/status` puis affichés en badges UI.
+- Détection driver DB à chaque démarrage (variable d'environnement prioritaire).
+
+### Performance & Scalabilité légère
+- Aucune stateful session côté serveur (stateless HTTP). 
+- Disques : SQLite pour usage local simple; Postgres recommandé dès déploiement cloud.
+- Import volumineux optimisé : préchargement des release_ids existants en un seul `SELECT`.
+- Réordonnancement O(N) avec une seule requête Postgres ou deux passes SQLite.
+
+### Extensibilité
+Pour ajouter une nouvelle entité :
+1. Étendre schéma (ajout table dans création automatique).
+2. Ajouter endpoints REST (CRUD minimal) + log actions.
+3. Mettre à jour export/import (order logique d'insertion + mapping si dépendances FK).
+4. Ajouter rendu front (zones dynamiques et update du cache local).
+
+### Diagrammes de séquence (textuels)
+Ajout album : `Client → POST /api/albums → (Fetch Discogs) → Insert album + log → 200 (payload)`
+Import : `Client → POST /api/admin/import → (Parse + mapping + inserts/transaction) → Log(s) → 200 (compteurs)`
+Réorder : `Client → PUT /api/lists/:id/items/order → (Algorithme spécifique driver) → 200`
+
+### Limitations actuelles d'architecture
+- Pas de cache HTTP / ETag (coût faible pour le use-case).
+- Pas de pagination sur grands jeux (logs, albums) – charge front potentielle si >5k éléments.
+- Pas de tests automatisés (à introduire pour sécuriser réécritures futures).
+
+### Surveillabilité future
+Idées : compteur d'erreurs agrégé, histogramme latences (wrap `db.run`), endpoint `/api/admin/metrics` Prometheus, budgets de latence.
+
+---
+
 ## API (vue synthétique actuelle)
 
 Albums
@@ -150,6 +276,7 @@ Tags
 Administration / Base
 - `GET /api/status` – infos runtime (token, uptime…)
 - `GET /api/admin/health` – présence / compte des tables
+- `GET /api/admin/system` – métriques système & base (process, taille DB, version, logs 24h)
 - `POST /api/admin/rebuild` – (re)crée le schéma si nécessaire
 - `GET /api/admin/export` – export JSON complet
 - `POST /api/admin/import` – import JSON (transactionnel)
@@ -224,6 +351,9 @@ Le code active automatiquement `ssl: { rejectUnauthorized: false }` pour certain
 - Sauvegarde préférences utilisateur (vue mosaïque, etc.)
 - Export partiel (sélection de listes seulement)
 - Endpoint de recherche/fusion d'albums en doublon
+ - Rafraîchissement programmatique d'une liste entière (batch contrôlé)
+ - Index supplémentaires si volume > 50k (année, (list_id, position), release_id)
+ - Tests automatisés (actuellement absents)
 
 ## Contribution
 

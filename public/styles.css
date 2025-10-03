@@ -626,3 +626,11 @@ footer.site-footer a:hover { text-decoration:underline; }
 .album-tracklist li { margin:0 0 4px; }
 @media (max-width:900px) { .album-modal-dialog { flex-direction:column; max-width:620px; } .album-modal-cover { flex:0 0 auto; } }
 @media (max-width:560px) { .album-modal-dialog { margin:12px auto; } .album-modal-info { padding:18px 18px 24px; } }
+
+/* Modal image zoom */
+.modal-cover-img { cursor:zoom-in; transition:transform .35s ease, box-shadow .35s ease; border-radius:4px; }
+.modal-cover-img.zoomed { cursor:zoom-out; transform:scale(1.6); box-shadow:0 12px 40px -8px rgba(0,0,0,.6); position:relative; z-index:5; }
+
+.copy-release-btn { background:var(--bg-alt); color:var(--text); border:1px solid var(--border); padding:8px 14px; border-radius:6px; font-size:.75rem; font-weight:600; cursor:pointer; transition:var(--transition); }
+.copy-release-btn:hover { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
+.copy-release-btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }

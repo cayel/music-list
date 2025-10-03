@@ -83,8 +83,9 @@ const importStatusBox = document.getElementById('importStatus');
 const statsSection = document.getElementById('statsSection');
 const statsBoardsEl = document.getElementById('statsBoards');
 const statsDetailsEl = document.getElementById('statsDetails');
-const albumModal = document.getElementById('albumModal');
-const albumModalBody = document.getElementById('albumModalBody');
+// Le script est chargé avant le markup du modal dans index.html, on résout paresseusement
+let albumModal = null;
+let albumModalBody = null;
 
 // Défense: si une navigation précoce appelle les stats avant que les helpers ne soient définis plus bas
 if (typeof window.computeAlbumStats !== 'function') {
@@ -128,6 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
     initAdminDebug();
     if (systemStatusBtn) systemStatusBtn.addEventListener('click', handleSystemStatusToggle);
+    // Initialiser références modal (présent après script dans le HTML)
+    if (!albumModal) albumModal = document.getElementById('albumModal');
+    if (!albumModalBody) albumModalBody = document.getElementById('albumModalBody');
 });
 
     async function loadStatus() {
@@ -679,13 +683,37 @@ function createAlbumCard(album) { // modified to add data-album-id
 
 // Ouvrir le modal d'album
 function openAlbumModal(album) {
-  if (!albumModal || !albumModalBody) return;
-  albumModalBody.innerHTML = buildAlbumModalContent(album);
-  albumModal.setAttribute('aria-hidden','false');
-  albumModal.style.display='block';
-  // close bindings
-  albumModal.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', closeAlbumModal));
-  document.addEventListener('keydown', escModalHandler, { once:true });
+    if (!albumModal || !albumModalBody) {
+        albumModal = document.getElementById('albumModal');
+        albumModalBody = document.getElementById('albumModalBody');
+    }
+    if (!albumModal || !albumModalBody) {
+        console.warn('[Modal] Élément modal introuvable dans le DOM');
+        return;
+    }
+    albumModalBody.innerHTML = buildAlbumModalContent(album);
+    albumModal.setAttribute('aria-hidden','false');
+    albumModal.style.display='block';
+    // close bindings
+    albumModal.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', closeAlbumModal));
+    document.addEventListener('keydown', escModalHandler, { once:true });
+    const copyBtn = albumModal.querySelector('.copy-release-btn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            const rel = copyBtn.getAttribute('data-relid');
+            if (!rel) return;
+            navigator.clipboard.writeText(rel).then(()=> {
+                const prev = copyBtn.textContent; copyBtn.textContent='Copié!';
+                setTimeout(()=> { copyBtn.textContent = prev; }, 1500);
+            }).catch(()=>{});
+        });
+    }
+    const coverImg = albumModal.querySelector('.modal-cover-img');
+    if (coverImg) {
+        coverImg.addEventListener('click', () => {
+            coverImg.classList.toggle('zoomed');
+        });
+    }
 }
 
 function closeAlbumModal() {
@@ -696,7 +724,7 @@ function escModalHandler(e){ if (e.key === 'Escape') closeAlbumModal(); }
 
 function buildAlbumModalContent(a) {
   const safeTitle = escapeHtml(a.album_title); const safeArtist = escapeHtml(a.artist_name);
-  const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="Pochette ${safeTitle}">` : `<div class="cover-placeholder" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:4rem;">🎵</div>`;
+    const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="Pochette ${safeTitle}" class="modal-cover-img" data-zoomable="1">` : `<div class="cover-placeholder" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:4rem;">🎵</div>`;
   const discogsLink = a.release_id ? `https://www.discogs.com/release/${a.release_id}` : null;
   const metaEntries = [
     ['Année', a.release_year || '—'],
@@ -721,7 +749,8 @@ function buildAlbumModalContent(a) {
       </div>
       <ul class="album-meta-list">${metaHtml}</ul>
       <div class="album-modal-actions">
-        ${discogsLink ? `<a href="${discogsLink}" target="_blank" rel="noopener">Voir sur Discogs ↗</a>` : ''}
+                ${discogsLink ? `<a href="${discogsLink}" target="_blank" rel="noopener" title="Ouvrir sur Discogs">Discogs ↗</a>` : ''}
+                ${a.release_id ? `<button type="button" class="copy-release-btn" data-relid="${a.release_id}" title="Copier Release ID">Copier ID</button>` : ''}
       </div>
       ${tracklistHtml}
     </div>`;
@@ -1505,4 +1534,47 @@ function validateAlbumsSchema(arr) {
     if (!('artist_name' in a)) return 'Champ artist_name manquant index ' + i;
   }
   return null;
+}
+
+// --- Patch accessibilité / fallback modal (append-only) ---
+if (!window.__albumDelegationInstalled) {
+    window.__albumDelegationInstalled = true;
+    document.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('albumsContainer');
+        if (!container) return;
+        // Rendre existantes focusables si pas déjà role
+        function upgradeTiles() {
+            container.querySelectorAll('.album-tile').forEach(t => {
+                if (!t.hasAttribute('role')) t.setAttribute('role','button');
+                if (!t.hasAttribute('tabindex')) t.setAttribute('tabindex','0');
+            });
+        }
+        upgradeTiles();
+        const mo = new MutationObserver(() => upgradeTiles());
+        mo.observe(container, { childList:true, subtree:true });
+        container.addEventListener('click', (e) => {
+            const tile = e.target.closest('.album-tile');
+            if (!tile) return;
+            if (e.target.closest('.tile-actions')) return;
+            const id = parseInt(tile.getAttribute('data-album-id'), 10);
+            if (!Number.isInteger(id)) return;
+            const album = (window.albums||[]).find(a => a.id === id);
+            if (album) {
+                try { openAlbumModal(album); } catch(err){ console.error('Erreur openAlbumModal', err); }
+            }
+        });
+        container.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const tile = e.target.closest('.album-tile');
+            if (!tile) return;
+            if (e.target.closest('.tile-actions')) return;
+            e.preventDefault();
+            const id = parseInt(tile.getAttribute('data-album-id'), 10);
+            if (!Number.isInteger(id)) return;
+            const album = (window.albums||[]).find(a => a.id === id);
+            if (album) {
+                try { openAlbumModal(album); } catch(err){ console.error('Erreur openAlbumModal', err); }
+            }
+        });
+    });
 }
