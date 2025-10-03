@@ -483,11 +483,39 @@ app.post('/api/admin/import', (req, res) => {
         if (isPg) await exec('BEGIN');
         const albumIdMap = {}; // old -> new
         const listIdMap = {}; // old -> new
+        let skippedAlbumDuplicates = 0;
         try {
+            // Pré-charger les albums existants par release_id (pour éviter doublons)
+            const existingRelease = await new Promise((resolve, reject) => {
+                dbLayer.all('SELECT id, release_id FROM albums WHERE release_id IS NOT NULL', (e, rows) => {
+                    if (e) return reject(e); resolve(rows || []);
+                });
+            });
+            const releaseToId = new Map();
+            existingRelease.forEach(r => { if (r.release_id != null) releaseToId.set(r.release_id, r.id); });
             // Albums
             for (const a of al) {
-                const ctx = await exec(`INSERT INTO albums (release_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`, [a.release_id, a.artist_name, a.album_title, a.release_year, a.genre, a.style, a.label, a.cover_image_url, a.created_at || new Date().toISOString(), a.updated_at || new Date().toISOString()]);
-                if (a.id !== undefined) albumIdMap[a.id] = ctx.lastID; // ctx.lastID défini pour les deux drivers
+                // Si release_id déjà présent dans la base cible, on remappe sans insérer
+                if (a.release_id != null && releaseToId.has(a.release_id)) {
+                    const existingId = releaseToId.get(a.release_id);
+                    if (a.id !== undefined) albumIdMap[a.id] = existingId;
+                    skippedAlbumDuplicates++;
+                    continue;
+                }
+                try {
+                    const ctx = await exec(`INSERT INTO albums (release_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`, [a.release_id, a.artist_name, a.album_title, a.release_year, a.genre, a.style, a.label, a.cover_image_url, a.created_at || new Date().toISOString(), a.updated_at || new Date().toISOString()]);
+                    const newId = ctx.lastID;
+                    if (a.release_id != null) releaseToId.set(a.release_id, newId);
+                    if (a.id !== undefined) albumIdMap[a.id] = newId; // ctx.lastID défini pour les deux drivers
+                } catch (insErr) {
+                    // En cas de race condition improbable: retenter via select unique
+                    if (insErr.message && insErr.message.includes('UNIQUE')) {
+                        const row = await new Promise((resolve) => dbLayer.get('SELECT id FROM albums WHERE release_id=?', [a.release_id], (_e, r) => resolve(r)));
+                        if (row && a.id !== undefined) { albumIdMap[a.id] = row.id; skippedAlbumDuplicates++; continue; }
+                        throw insErr;
+                    }
+                    throw insErr;
+                }
             }
             // Listes
             for (const l of ls) {
@@ -510,11 +538,12 @@ app.post('/api/admin/import', (req, res) => {
                 await exec(`INSERT INTO list_tags (list_id, tag) VALUES (?,?)`, [mappedListId, t.tag]);
             }
             if (isPg) await exec('COMMIT');
-            logOperation('admin.import', 'admin', null, { counts: { albums: al.length, lists: ls.length, list_items: li.length, list_tags: lt.length } });
+            logOperation('admin.import', 'admin', null, { counts: { albums: al.length, lists: ls.length, list_items: li.length, list_tags: lt.length, albums_duplicates_skipped: skippedAlbumDuplicates } });
             res.json({
                 message: 'Import terminé',
-                counts: { albums: al.length, lists: ls.length, list_items: li.length, list_tags: lt.length },
-                remapped: { albums: Object.keys(albumIdMap).length, lists: Object.keys(listIdMap).length }
+                counts: { albums: al.length, lists: ls.length, list_items: li.length, list_tags: lt.length, albums_duplicates_skipped: skippedAlbumDuplicates },
+                remapped: { albums: Object.keys(albumIdMap).length, lists: Object.keys(listIdMap).length },
+                note: skippedAlbumDuplicates ? `${skippedAlbumDuplicates} album(s) déjà présent(s) ignoré(s)` : undefined
             });
         } catch (e) {
             if (isPg) await exec('ROLLBACK');
