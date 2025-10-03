@@ -319,22 +319,18 @@ app.post('/api/lists/:id/items', async (req, res) => {
         try {
             let finalAlbumId = albumId;
             if (!finalAlbumId && releaseId) finalAlbumId = await ensureAlbumByRelease(releaseId);
-            dbLayer.get('SELECT MAX(position) as maxPos FROM list_items WHERE list_id=?', [id], (pErr, r) => {
-                if (pErr) return res.status(500).json({ error: pErr.message });
-                // Attention: Postgres renvoie l'alias non quoté en minuscules => maxpos
-                const rawMax = r ? (r.maxPos !== undefined ? r.maxPos : r.maxpos) : null;
-                const numericMax = rawMax == null ? null : Number(rawMax);
-                const nextPos = Number.isFinite(numericMax) ? numericMax + 1 : 1;
-                dbLayer.run('INSERT INTO list_items (list_id, album_id, position) VALUES (?, ?, ?)', [id, finalAlbumId, nextPos], function (insErr) {
-                    if (insErr) {
-                        if (insErr.message.includes('UNIQUE')) return res.status(409).json({ error: 'Album déjà dans la liste' });
-                        return res.status(500).json({ error: insErr.message });
-                    }
-                    dbLayer.get('SELECT * FROM list_items WHERE id=?', [this.lastID], (gErr, liRow) => {
-                        if (gErr) return res.status(500).json({ error: gErr.message });
-                        logOperation('list_item.add', 'list', id, { item_id: liRow.id, album_id: finalAlbumId });
-                        res.json({ message: 'Ajouté', item: liRow });
-                    });
+            // Insertion atomique du prochain rang pour éviter les races (UNIQUE list_id, position)
+            const insertSql = `INSERT INTO list_items (list_id, album_id, position)
+                               SELECT ?, ?, COALESCE(MAX(position),0)+1 FROM list_items WHERE list_id=?`;
+            dbLayer.run(insertSql, [id, finalAlbumId, id], function (insErr) {
+                if (insErr) {
+                    if (insErr.message.includes('UNIQUE')) return res.status(409).json({ error: 'Album déjà dans la liste' });
+                    return res.status(500).json({ error: insErr.message });
+                }
+                dbLayer.get('SELECT * FROM list_items WHERE id=?', [this.lastID], (gErr, liRow) => {
+                    if (gErr) return res.status(500).json({ error: gErr.message });
+                    logOperation('list_item.add', 'list', id, { item_id: liRow.id, album_id: finalAlbumId });
+                    res.json({ message: 'Ajouté', item: liRow });
                 });
             });
         } catch (e) {
@@ -373,26 +369,37 @@ app.put('/api/lists/:id/items/order', (req, res) => {
                 });
             });
         } else {
+            // Nouvelle stratégie SQLite : deux passes avec positions négatives (évite toute collision UNIQUE même sur permutations simples)
+            // 1) Assigner des positions négatives uniques (-1, -2, ...) à l'ordre cible
+            // 2) Réassigner en positif (1..n)
             dbLayer.run('BEGIN TRANSACTION');
-            dbLayer.run('UPDATE list_items SET position=position+1000 WHERE list_id=?', [id], (bErr) => {
-                if (bErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: bErr.message }); }
-                let remaining = order.length; let failed = false;
-                order.forEach((liId, idx) => {
-                    dbLayer.run('UPDATE list_items SET position=? WHERE id=?', [idx + 1, liId], (uErr) => {
-                        if (failed) return;
-                        if (uErr) { failed = true; dbLayer.run('ROLLBACK'); return res.status(500).json({ error: uErr.message }); }
-                        remaining--;
-                        if (!remaining) {
-                            dbLayer.run('COMMIT', (cErr) => {
-                                if (cErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: cErr.message }); }
-                                dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
-                                    if (fErr) return res.status(500).json({ error: fErr.message });
-                                    logOperation('list_item.reorder', 'list', id, { count: ordered.length });
-                                    res.json({ message: 'Ordre mis à jour', items: ordered });
-                                });
+            let failed = false; let remainingNeg = order.length; let remainingPos = order.length;
+            order.forEach((liId, idx) => {
+                // Phase négative
+                dbLayer.run('UPDATE list_items SET position=? WHERE id=? AND list_id=?', [-(idx + 1), liId, id], (negErr) => {
+                    if (failed) return;
+                    if (negErr) { failed = true; dbLayer.run('ROLLBACK'); return res.status(500).json({ error: negErr.message }); }
+                    remainingNeg--;
+                    if (remainingNeg === 0) {
+                        // Phase positive
+                        order.forEach((liId2, idx2) => {
+                            dbLayer.run('UPDATE list_items SET position=? WHERE id=? AND list_id=?', [idx2 + 1, liId2, id], (posErr) => {
+                                if (failed) return;
+                                if (posErr) { failed = true; dbLayer.run('ROLLBACK'); return res.status(500).json({ error: posErr.message }); }
+                                remainingPos--;
+                                if (remainingPos === 0) {
+                                    dbLayer.run('COMMIT', (cErr) => {
+                                        if (cErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: cErr.message }); }
+                                        dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
+                                            if (fErr) return res.status(500).json({ error: fErr.message });
+                                            logOperation('list_item.reorder', 'list', id, { count: ordered.length });
+                                            res.json({ message: 'Ordre mis à jour', items: ordered });
+                                        });
+                                    });
+                                }
                             });
-                        }
-                    });
+                        });
+                    }
                 });
             });
         }
