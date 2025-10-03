@@ -348,10 +348,18 @@ app.post('/api/lists/:id/items', async (req, res) => {
 app.put('/api/lists/:id/items/order', (req, res) => {
     const { id } = req.params; const { order } = req.body || {};
     if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order doit être un tableau non vide' });
-    const placeholders = order.map(() => '?').join(',');
-    dbLayer.all(`SELECT id FROM list_items WHERE list_id=? AND id IN (${placeholders})`, [id, ...order], (err, rows) => {
+    // Nouvelle logique: on récupère tous les items de la liste pour détecter si l'ordre fourni est partiel.
+    dbLayer.all('SELECT id FROM list_items WHERE list_id=? ORDER BY position ASC', [id], (err, allRows) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (rows.length !== order.length) return res.status(400).json({ error: 'Items invalides' });
+        if (!allRows.length) return res.status(404).json({ error: 'Liste vide ou non trouvée' });
+        const allIds = allRows.map(r => r.id);
+        const allSet = new Set(allIds);
+        // Validation que chaque id fourni appartient bien à la liste
+        for (const oid of order) { if (!allSet.has(oid)) return res.status(400).json({ error: `Item ${oid} invalide pour cette liste` }); }
+        const providedSet = new Set(order);
+        const tail = allIds.filter(x => !providedSet.has(x));
+        const fullOrder = [...order, ...tail]; // Items déplacés en tête dans l'ordre donné, puis le reste dans l'ordre existant
+        const isPartial = fullOrder.length !== order.length; // vrai si on n'a pas fourni tous les items
         if (dbLayer.driver === 'pg') {
             // Réordonnancement atomique via CTE et unnest(array)
             // Avantages :
@@ -365,12 +373,12 @@ app.put('/api/lists/:id/items/order', (req, res) => {
             SET position = np.pos
             FROM np
             WHERE li.id = np.id AND li.list_id = $2`;
-            dbLayer.run(sql, [order, id], (uErr) => {
+            dbLayer.run(sql, [fullOrder, id], (uErr) => {
                 if (uErr) return res.status(500).json({ error: uErr.message });
                 dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
                     if (fErr) return res.status(500).json({ error: fErr.message });
-                    logOperation('list_item.reorder', 'list', id, { count: ordered.length });
-                    res.json({ message: 'Ordre mis à jour', items: ordered });
+                    logOperation('list_item.reorder', 'list', id, { count: ordered.length, partial: isPartial });
+                    res.json({ message: 'Ordre mis à jour', items: ordered, partial: isPartial });
                 });
             });
         } else {
@@ -378,8 +386,8 @@ app.put('/api/lists/:id/items/order', (req, res) => {
             // 1) Assigner des positions négatives uniques (-1, -2, ...) à l'ordre cible
             // 2) Réassigner en positif (1..n)
             dbLayer.run('BEGIN TRANSACTION');
-            let failed = false; let remainingNeg = order.length; let remainingPos = order.length;
-            order.forEach((liId, idx) => {
+            let failed = false; let remainingNeg = fullOrder.length; let remainingPos = fullOrder.length;
+            fullOrder.forEach((liId, idx) => {
                 // Phase négative
                 dbLayer.run('UPDATE list_items SET position=? WHERE id=? AND list_id=?', [-(idx + 1), liId, id], (negErr) => {
                     if (failed) return;
@@ -387,7 +395,7 @@ app.put('/api/lists/:id/items/order', (req, res) => {
                     remainingNeg--;
                     if (remainingNeg === 0) {
                         // Phase positive
-                        order.forEach((liId2, idx2) => {
+                        fullOrder.forEach((liId2, idx2) => {
                             dbLayer.run('UPDATE list_items SET position=? WHERE id=? AND list_id=?', [idx2 + 1, liId2, id], (posErr) => {
                                 if (failed) return;
                                 if (posErr) { failed = true; dbLayer.run('ROLLBACK'); return res.status(500).json({ error: posErr.message }); }
@@ -397,8 +405,8 @@ app.put('/api/lists/:id/items/order', (req, res) => {
                                         if (cErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: cErr.message }); }
                                         dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
                                             if (fErr) return res.status(500).json({ error: fErr.message });
-                                            logOperation('list_item.reorder', 'list', id, { count: ordered.length });
-                                            res.json({ message: 'Ordre mis à jour', items: ordered });
+                                            logOperation('list_item.reorder', 'list', id, { count: ordered.length, partial: isPartial });
+                                            res.json({ message: 'Ordre mis à jour', items: ordered, partial: isPartial });
                                         });
                                     });
                                 }
