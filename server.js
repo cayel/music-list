@@ -55,7 +55,17 @@ app.get('/api/status', (req, res) => {
             }
         } catch { /* ignore */ }
     }
-    res.json({ discogsToken: !!DISCOGS_TOKEN, uptime: process.uptime(), timestamp: new Date().toISOString(), db, port: PORT });
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const envName = process.env.ENV_NAME || nodeEnv;
+    const isLocal = (nodeEnv !== 'production') || ['localhost','127.0.0.1'].includes(require('os').hostname()) || db.driver === 'sqlite';
+    res.json({
+        discogsToken: !!DISCOGS_TOKEN,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        db,
+        port: PORT,
+        env: { node: nodeEnv, name: envName, isLocal }
+    });
 });
 
 function logOperation(action, entityType, entityId, infoObj) {
@@ -311,7 +321,10 @@ app.post('/api/lists/:id/items', async (req, res) => {
             if (!finalAlbumId && releaseId) finalAlbumId = await ensureAlbumByRelease(releaseId);
             dbLayer.get('SELECT MAX(position) as maxPos FROM list_items WHERE list_id=?', [id], (pErr, r) => {
                 if (pErr) return res.status(500).json({ error: pErr.message });
-                const nextPos = (r && r.maxPos) ? r.maxPos + 1 : 1;
+                // Attention: Postgres renvoie l'alias non quoté en minuscules => maxpos
+                const rawMax = r ? (r.maxPos !== undefined ? r.maxPos : r.maxpos) : null;
+                const numericMax = rawMax == null ? null : Number(rawMax);
+                const nextPos = Number.isFinite(numericMax) ? numericMax + 1 : 1;
                 dbLayer.run('INSERT INTO list_items (list_id, album_id, position) VALUES (?, ?, ?)', [id, finalAlbumId, nextPos], function (insErr) {
                     if (insErr) {
                         if (insErr.message.includes('UNIQUE')) return res.status(409).json({ error: 'Album déjà dans la liste' });
