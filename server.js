@@ -352,12 +352,19 @@ app.put('/api/lists/:id/items/order', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (rows.length !== order.length) return res.status(400).json({ error: 'Items invalides' });
         if (dbLayer.driver === 'pg') {
-            // Construction d'un seul UPDATE atomique
-            // UPDATE list_items SET position = CASE id WHEN ? THEN 1 WHEN ? THEN 2 ... END WHERE list_id=? AND id IN (..)
-            const caseWhens = order.map((_, i) => 'WHEN ? THEN ' + (i + 1)).join(' ');
-            const sql = `UPDATE list_items SET position = CASE id ${caseWhens} END WHERE list_id=? AND id IN (${placeholders})`;
-            const params = [...order, id, ...order];
-            dbLayer.run(sql, params, (uErr) => {
+            // Réordonnancement atomique via CTE et unnest(array)
+            // Avantages :
+            // - Pas de positions temporaires hors borne (ex: +1000)
+            // - Vérification finale de la contrainte UNIQUE en une fois
+            const sql = `WITH np AS (
+                SELECT unnest($1::int[]) AS id,
+                       generate_series(1, array_length($1::int[], 1)) AS pos
+            )
+            UPDATE list_items li
+            SET position = np.pos
+            FROM np
+            WHERE li.id = np.id AND li.list_id = $2`;
+            dbLayer.run(sql, [order, id], (uErr) => {
                 if (uErr) return res.status(500).json({ error: uErr.message });
                 dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
                     if (fErr) return res.status(500).json({ error: fErr.message });
