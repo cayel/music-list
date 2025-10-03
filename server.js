@@ -319,18 +319,23 @@ app.post('/api/lists/:id/items', async (req, res) => {
         try {
             let finalAlbumId = albumId;
             if (!finalAlbumId && releaseId) finalAlbumId = await ensureAlbumByRelease(releaseId);
-            // Insertion atomique du prochain rang pour éviter les races (UNIQUE list_id, position)
-            const insertSql = `INSERT INTO list_items (list_id, album_id, position)
-                               SELECT ?, ?, COALESCE(MAX(position),0)+1 FROM list_items WHERE list_id=?`;
-            dbLayer.run(insertSql, [id, finalAlbumId, id], function (insErr) {
-                if (insErr) {
-                    if (insErr.message.includes('UNIQUE')) return res.status(409).json({ error: 'Album déjà dans la liste' });
-                    return res.status(500).json({ error: insErr.message });
-                }
-                dbLayer.get('SELECT * FROM list_items WHERE id=?', [this.lastID], (gErr, liRow) => {
-                    if (gErr) return res.status(500).json({ error: gErr.message });
-                    logOperation('list_item.add', 'list', id, { item_id: liRow.id, album_id: finalAlbumId });
-                    res.json({ message: 'Ajouté', item: liRow });
+            // Pré‑vérification (évite retour 500 Postgres 'duplicate key value')
+            dbLayer.get('SELECT id FROM list_items WHERE list_id=? AND album_id=?', [id, finalAlbumId], (dupErr, existing) => {
+                if (dupErr) return res.status(500).json({ error: dupErr.message });
+                if (existing) return res.status(409).json({ error: 'Album déjà dans la liste' });
+                // Insertion atomique du prochain rang pour éviter les races (UNIQUE list_id, position)
+                const insertSql = `INSERT INTO list_items (list_id, album_id, position)
+                                   SELECT ?, ?, COALESCE(MAX(position),0)+1 FROM list_items WHERE list_id=?`;
+                dbLayer.run(insertSql, [id, finalAlbumId, id], function (insErr) {
+                    if (insErr) {
+                        if (/UNIQUE|duplicate key value/i.test(insErr.message)) return res.status(409).json({ error: 'Album déjà dans la liste' });
+                        return res.status(500).json({ error: insErr.message });
+                    }
+                    dbLayer.get('SELECT * FROM list_items WHERE id=?', [this.lastID], (gErr, liRow) => {
+                        if (gErr) return res.status(500).json({ error: gErr.message });
+                        logOperation('list_item.add', 'list', id, { item_id: liRow.id, album_id: finalAlbumId });
+                        res.json({ message: 'Ajouté', item: liRow });
+                    });
                 });
             });
         } catch (e) {
