@@ -348,6 +348,15 @@ app.post('/api/lists/:id/items', async (req, res) => {
 app.put('/api/lists/:id/items/order', (req, res) => {
     const { id } = req.params; const { order } = req.body || {};
     if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order doit être un tableau non vide' });
+    // Normalisation & déduplication (si le front envoie par erreur un ID deux fois, on garde la 1ère occurrence)
+    const normalized = order.map(o => Number(o));
+    const seenIds = new Set();
+    const dedupOrder = [];
+    for (const oid of normalized) {
+        if (!Number.isFinite(oid)) return res.status(400).json({ error: `ID invalide: ${oid}` });
+        if (!seenIds.has(oid)) { seenIds.add(oid); dedupOrder.push(oid); }
+    }
+    const hadDuplicates = dedupOrder.length !== normalized.length;
     // Nouvelle logique: on récupère tous les items de la liste pour détecter si l'ordre fourni est partiel.
     dbLayer.all('SELECT id FROM list_items WHERE list_id=? ORDER BY position ASC', [id], (err, allRows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -355,11 +364,11 @@ app.put('/api/lists/:id/items/order', (req, res) => {
         const allIds = allRows.map(r => r.id);
         const allSet = new Set(allIds);
         // Validation que chaque id fourni appartient bien à la liste
-        for (const oid of order) { if (!allSet.has(oid)) return res.status(400).json({ error: `Item ${oid} invalide pour cette liste` }); }
-        const providedSet = new Set(order);
+        for (const oid of dedupOrder) { if (!allSet.has(oid)) return res.status(400).json({ error: `Item ${oid} invalide pour cette liste` }); }
+        const providedSet = new Set(dedupOrder);
         const tail = allIds.filter(x => !providedSet.has(x));
-        const fullOrder = [...order, ...tail]; // Items déplacés en tête dans l'ordre donné, puis le reste dans l'ordre existant
-        const isPartial = fullOrder.length !== order.length; // vrai si on n'a pas fourni tous les items
+        const fullOrder = [...dedupOrder, ...tail]; // Items déplacés en tête dans l'ordre donné, puis le reste dans l'ordre existant
+        const isPartial = fullOrder.length !== allIds.length; // vrai si on n'a pas fourni tous les items
         if (dbLayer.driver === 'pg') {
             // Réordonnancement atomique via CTE et unnest(array)
             // Avantages :
@@ -377,8 +386,8 @@ app.put('/api/lists/:id/items/order', (req, res) => {
                 if (uErr) return res.status(500).json({ error: uErr.message });
                 dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
                     if (fErr) return res.status(500).json({ error: fErr.message });
-                    logOperation('list_item.reorder', 'list', id, { count: ordered.length, partial: isPartial });
-                    res.json({ message: 'Ordre mis à jour', items: ordered, partial: isPartial });
+                    logOperation('list_item.reorder', 'list', id, { count: ordered.length, partial: isPartial, dedup: hadDuplicates });
+                    res.json({ message: 'Ordre mis à jour', items: ordered, partial: isPartial, dedup: hadDuplicates });
                 });
             });
         } else {
@@ -405,8 +414,8 @@ app.put('/api/lists/:id/items/order', (req, res) => {
                                         if (cErr) { dbLayer.run('ROLLBACK'); return res.status(500).json({ error: cErr.message }); }
                                         dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [id], (fErr, ordered) => {
                                             if (fErr) return res.status(500).json({ error: fErr.message });
-                                            logOperation('list_item.reorder', 'list', id, { count: ordered.length, partial: isPartial });
-                                            res.json({ message: 'Ordre mis à jour', items: ordered, partial: isPartial });
+                                            logOperation('list_item.reorder', 'list', id, { count: ordered.length, partial: isPartial, dedup: hadDuplicates });
+                                            res.json({ message: 'Ordre mis à jour', items: ordered, partial: isPartial, dedup: hadDuplicates });
                                         });
                                     });
                                 }
