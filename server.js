@@ -58,13 +58,21 @@ app.get('/api/status', (req, res) => {
     const nodeEnv = process.env.NODE_ENV || 'development';
     const envName = process.env.ENV_NAME || nodeEnv;
     const isLocal = (nodeEnv !== 'production') || ['localhost','127.0.0.1'].includes(require('os').hostname()) || db.driver === 'sqlite';
+    // Version app (package.json) + court hash Git si disponible
+    let version = null; let git = null;
+    try { version = require('./package.json').version || null; } catch { /* ignore */ }
+    try {
+        const cp = require('child_process');
+        git = cp.execSync('git rev-parse --short HEAD',{stdio:['ignore','pipe','ignore']}).toString().trim();
+    } catch { /* ignore */ }
     res.json({
         discogsToken: !!DISCOGS_TOKEN,
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         db,
         port: PORT,
-        env: { node: nodeEnv, name: envName, isLocal }
+        env: { node: nodeEnv, name: envName, isLocal },
+        version: { app: version, git }
     });
 });
 

@@ -42,6 +42,13 @@ header.app-header { margin-bottom:34px; }
 .status-help { margin-top:12px; font-size:.85rem; color:var(--text-soft); line-height:1.4; }
 .inline-status { flex-direction:row; flex-wrap:wrap; }
 .inline-status div { min-width:140px; }
+.env-badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:.65rem; font-weight:700; letter-spacing:.08em; background:#444; color:#fff; margin:4px 0 8px; box-shadow:var(--shadow-sm); }
+.env-badge.local { background:linear-gradient(135deg,#0f8f2f,#087024); }
+.env-badge.dev { background:linear-gradient(135deg,#2563eb,#1d4ed8); }
+.env-badge.staging { background:linear-gradient(135deg,#b45309,#92400e); }
+.env-badge.prod { background:linear-gradient(135deg,#6b7280,#374151); }
+[data-theme="dark"] .env-badge.prod { background:linear-gradient(135deg,#4b5563,#1f2937); }
+.app-version { display:inline-block; background:var(--bg-alt); padding:4px 10px; border:1px solid var(--border); border-radius:999px; font-weight:600; letter-spacing:.06em; font-size:.65rem; box-shadow:var(--shadow-sm); }
 .tips-card p { margin:0; color:var(--text-soft); line-height:1.55; }
 
 .badge { display:inline-flex; align-items:center; justify-content:center; padding:4px 12px; border-radius:999px; font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid transparent; }

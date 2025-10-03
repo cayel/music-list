@@ -59,6 +59,7 @@ const dbLocationEl = document.getElementById('dbLocation');
 const discogsHelpEl = document.getElementById('discogsHelp');
 const envBadgeEl = document.getElementById('envBadge');
 const envBadgeGlobalEl = document.getElementById('envBadgeGlobal');
+const appVersionEl = document.getElementById('appVersion');
 // Listes
 let lists = [];
 const listsContainer = document.getElementById('listsContainer');
@@ -164,6 +165,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     envBadgeGlobalEl.className = envBadgeEl.className;
                     envBadgeGlobalEl.style.display = 'inline-block';
                     envBadgeGlobalEl.title = envBadgeEl.title || '';
+                }
+            }
+            if (appVersionEl && data.version) {
+                const parts = [];
+                if (data.version.app) parts.push('v'+data.version.app);
+                if (data.version.git) parts.push(data.version.git);
+                if (parts.length) {
+                    appVersionEl.textContent = parts.join(' • ');
+                    appVersionEl.style.display = 'inline-block';
+                    appVersionEl.title = 'Version application';
                 }
             }
             // Refresh uptime every 10s
