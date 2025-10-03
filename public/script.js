@@ -39,6 +39,9 @@ const refreshLogsBtn = document.getElementById('refreshLogsBtn');
 const logsPanel = document.getElementById('logsPanel');
 const logsContainer = document.getElementById('logsContainer');
 const logsLimitSelect = document.getElementById('logsLimitSelect');
+const systemStatusBtn = document.getElementById('systemStatusBtn');
+const systemStatusPanel = document.getElementById('systemStatusPanel');
+const systemStatusContent = document.getElementById('systemStatusContent');
 const albumsContainer = document.getElementById('albumsContainer');
 const emptyState = document.getElementById('emptyState');
 const albumSearchInput = document.getElementById('albumSearch');
@@ -124,6 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (logsLimitSelect) logsLimitSelect.addEventListener('change', handleRefreshLogs);
     loadStatus();
     initAdminDebug();
+    if (systemStatusBtn) systemStatusBtn.addEventListener('click', handleSystemStatusToggle);
 });
 
     async function loadStatus() {
@@ -208,6 +212,56 @@ function handleAlbumFilterInput(e) {
     currentAlbumFilter = e.target.value || '';
     renderAlbums();
 }
+
+// ================== SYSTEM STATUS ==================
+async function handleSystemStatusToggle() {
+    if (!systemStatusPanel) return;
+    const visible = systemStatusPanel.style.display !== 'none';
+    if (visible) { systemStatusPanel.style.display='none'; return; }
+    systemStatusPanel.style.display='block';
+    systemStatusContent.textContent='Chargement…';
+    try {
+        const res = await adminFetch('/admin/system');
+        renderSystemStatus(res);
+    } catch (e) {
+        systemStatusContent.textContent='Erreur: ' + e.message;
+    }
+}
+
+function renderSystemStatus(data) {
+    if (!systemStatusContent) return;
+    const parts = [];
+    function kv(k,v){ parts.push(`<div class="kv"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`); }
+    // Process
+    if (data.process) {
+        kv('Uptime', formatUptime(data.process.uptime||0));
+        if (data.process.memory) kv('Heap Used', humanBytes(data.process.memory.heapUsed));
+        kv('Node', data.process.node||'');
+    }
+    if (data.app) {
+        kv('Version', (data.app.version||'') + (data.app.dirty ? ' *':'') );
+        if (data.app.git) kv('Git', data.app.git);
+    }
+    if (data.counts) {
+        kv('Albums', data.counts.albums);
+        kv('Listes', data.counts.lists);
+        kv('Items', data.counts.list_items);
+        kv('Tags', data.counts.list_tags);
+        kv('Logs', data.counts.logs);
+    }
+    if (data.recent) kv('Logs <24h', data.recent.logs24h);
+    if (data.db) {
+        kv('DB Driver', data.db.driver);
+        if (data.db.sizeBytes) kv('DB Taille', humanBytes(data.db.sizeBytes));
+        if (data.db.page_size) kv('Page Size', humanBytes(data.db.page_size));
+        if (data.db.tables) {
+            Object.entries(data.db.tables).forEach(([t,sz])=> kv(t+' size', humanBytes(sz)));
+        }
+    }
+    systemStatusContent.innerHTML = parts.join('');
+}
+
+function humanBytes(n){ if(!Number.isFinite(n)) return '—'; const units=['B','KB','MB','GB','TB']; let i=0; let v=n; while(v>=1024 && i<units.length-1){ v/=1024; i++; } return (v<10? v.toFixed(1):Math.round(v))+' '+units[i]; }
 
 function resetAlbumFilter() {
     currentAlbumFilter = '';

@@ -492,6 +492,13 @@ footer.site-footer a:hover { text-decoration:underline; }
 .footer-inner { display:inline-flex; align-items:center; gap:8px; }
 .footer-version { font-weight:600; letter-spacing:.05em; }
 .footer-sep { opacity:.4; }
+
+/* System status */
+.system-status-content { font-size:.72rem; line-height:1.35; display:grid; gap:6px; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); margin-top:10px; }
+.system-status-content .kv { background:var(--bg-alt); border:1px solid var(--border); padding:8px 10px; border-radius:8px; display:flex; flex-direction:column; gap:2px; box-shadow:var(--shadow-sm); }
+.system-status-content .k { font-size:.6rem; text-transform:uppercase; letter-spacing:.08em; font-weight:600; color:var(--text-soft); }
+.system-status-content .v { font-size:.8rem; font-weight:600; color:var(--text); }
+[data-theme="dark"] .system-status-content .kv { box-shadow:none; }
 .stats-card .mini-bar {
   display: flex;
   align-items: flex-end;

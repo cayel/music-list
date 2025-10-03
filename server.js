@@ -500,6 +500,69 @@ app.get('/api/admin/health', (req, res) => {
     });
 });
 
+// Système / métriques avancées
+app.get('/api/admin/system', async (req, res) => {
+    const isPg = dbLayer.driver === 'pg';
+    const result = { timestamp: new Date().toISOString() };
+    // Process / Node
+    const mem = process.memoryUsage();
+    result.process = {
+        uptime: process.uptime(),
+        memory: { rss: mem.rss, heapUsed: mem.heapUsed, heapTotal: mem.heapTotal },
+        node: process.version
+    };
+    // App version / git
+    try { result.app = { version: require('./package.json').version }; } catch { result.app = {}; }
+    try {
+        const cp = require('child_process');
+        result.app.git = cp.execSync('git rev-parse --short HEAD', { stdio:['ignore','pipe','ignore'] }).toString().trim();
+        // dirty flag
+        try { cp.execSync('git diff --quiet'); } catch { result.app.dirty = true; }
+    } catch { /* ignore */ }
+    // Environnement
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const envName = process.env.ENV_NAME || nodeEnv;
+    result.environment = { node: nodeEnv, name: envName };
+
+    // DB counts
+    const counts = { albums:0, lists:0, list_items:0, list_tags:0, logs:0 };
+    const countNames = Object.keys(counts);
+    await Promise.all(countNames.map(c => new Promise(resolve => {
+        dbLayer.get(`SELECT COUNT(*) as c FROM ${c === 'logs' ? 'operation_logs' : c}`, (e,row)=>{ counts[c]= e?0: row.c; resolve(); });
+    })));
+    result.counts = counts;
+
+    // DB size & table sizes
+    result.db = { driver: dbLayer.driver };
+    if (isPg) {
+        try {
+            const sizes = {};
+            // total DB size
+            await new Promise(resolve => dbLayer.get('SELECT pg_database_size(current_database()) as s', (e,row)=>{ if(!e&&row) result.db.sizeBytes=row.s; resolve(); }));
+            const rels = ['albums','lists','list_items','list_tags','operation_logs'];
+            await Promise.all(rels.map(tbl => new Promise(resolve => {
+                dbLayer.get(`SELECT pg_total_relation_size(?) as sz`, [tbl], (e,row)=>{ if(!e&&row) sizes[tbl]=row.sz; resolve(); });
+            })));
+            result.db.tables = sizes;
+        } catch (e) { result.db.error = e.message; }
+    } else {
+        // SQLite : taille fichier + estimation pages
+        const fs = require('fs'); const path = require('path');
+        const dbPath = process.env.DB_PATH || './music_collection.db';
+        try { const st = fs.statSync(dbPath); result.db.file = path.resolve(dbPath); result.db.sizeBytes = st.size; } catch { /* ignore */ }
+        // Page size / count
+        await new Promise(resolve => dbLayer.get('PRAGMA page_size', (e,row)=>{ if(!e&&row) result.db.page_size=row.page_size; resolve(); }));
+        await new Promise(resolve => dbLayer.get('PRAGMA page_count', (e,row)=>{ if(!e&&row) result.db.page_count=row.page_count; resolve(); }));
+        if (result.db.page_size && result.db.page_count && !result.db.sizeBytes) {
+            result.db.sizeBytes = result.db.page_size * result.db.page_count;
+        }
+    }
+
+    // Logs récents (24h)
+    await new Promise(resolve => dbLayer.get(`SELECT COUNT(*) as c FROM operation_logs WHERE created_at >= datetime('now','-1 day')`, (e,row)=>{ result.recent = { logs24h: e?0: row.c }; resolve(); }));
+    res.json(result);
+});
+
 app.post('/api/admin/rebuild', (_req, res) => {
     // Schéma déjà garanti à l'init
     res.json({ message: 'Schéma vérifié/reconstruit' });
