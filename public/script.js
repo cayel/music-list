@@ -57,6 +57,8 @@ const serverUptimeEl = document.getElementById('serverUptime');
 const dbDriverEl = document.getElementById('dbDriver');
 const dbLocationEl = document.getElementById('dbLocation');
 const discogsHelpEl = document.getElementById('discogsHelp');
+const envBadgeEl = document.getElementById('envBadge');
+const envBadgeGlobalEl = document.getElementById('envBadgeGlobal');
 // Listes
 let lists = [];
 const listsContainer = document.getElementById('listsContainer');
@@ -145,6 +147,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.db) {
                 if (dbDriverEl) dbDriverEl.textContent = data.db.driver || '–';
                 if (dbLocationEl) dbLocationEl.textContent = data.db.location || '–';
+            }
+            if (data.env && envBadgeEl) {
+                const { name, node, isLocal } = data.env;
+                const label = isLocal ? (name || 'local') : (name || node || 'env');
+                envBadgeEl.textContent = label.toUpperCase();
+                envBadgeEl.className = 'env-badge ' + (isLocal ? 'local' : (label.includes('stag') ? 'staging' : (label.includes('prod') ? 'prod':'dev')));
+                envBadgeEl.style.display = 'inline-block';
+                if (!isLocal && label.toLowerCase().startsWith('prod')) {
+                    envBadgeEl.title = 'Production';
+                } else if (isLocal) {
+                    envBadgeEl.title = 'Instance locale (sécurité: pas de disque géré)';
+                }
+                if (envBadgeGlobalEl) {
+                    envBadgeGlobalEl.textContent = envBadgeEl.textContent;
+                    envBadgeGlobalEl.className = envBadgeEl.className;
+                    envBadgeGlobalEl.style.display = 'inline-block';
+                    envBadgeGlobalEl.title = envBadgeEl.title || '';
+                }
             }
             // Refresh uptime every 10s
             if (!loadStatus._interval && serverUptimeEl) {
