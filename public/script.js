@@ -1035,11 +1035,45 @@ function inlineRenameList(id) {
 }
 
 function deleteList(id) {
-    if (!confirm('Supprimer cette liste ?')) return;
+        confirmListDeletion(id);
+}
+
+// Dialog de confirmation stylé pour suppression de liste
+function confirmListDeletion(listId) {
+    const overlay = document.getElementById('confirmOverlay');
+    if (!overlay) { if (confirm('Supprimer cette liste ?')) proceedListDeletion(listId); return; }
+    const msgEl = document.getElementById('confirmMessage');
+    const titleEl = document.getElementById('confirmTitle');
+    if (titleEl) titleEl.textContent = 'Supprimer la liste ?';
+    const list = lists.find(l=> String(l.id)===String(listId));
+    if (msgEl) msgEl.innerHTML = list ? `La liste <strong>${escapeHtml(list.name)}</strong> sera définitivement supprimée.<br><span style="font-size:.8rem; opacity:.8;">Les éléments associés (positions) seront retirés.</span>` : 'Cette liste sera supprimée.';
+    overlay.style.display='flex';
+    const okBtn = overlay.querySelector('[data-confirm-ok]');
+    const cancelBtn = overlay.querySelector('[data-confirm-cancel]');
+    const close = () => { overlay.style.display='none'; detach(); };
+    const onKey = (e)=> { if (e.key==='Escape') { close(); } };
+    const detach = () => { document.removeEventListener('keydown', onKey); if (okBtn) okBtn.removeEventListener('click', onOk); if (cancelBtn) cancelBtn.removeEventListener('click', onCancel); overlay.querySelectorAll('[data-confirm-cancel]').forEach(el=>el.removeEventListener('click', onCancel)); };
+    if (okBtn) okBtn.disabled = false; // réinitialise état précédent
+    const onOk = ()=> { if (okBtn) okBtn.disabled=true; proceedListDeletion(listId, () => { if (okBtn) okBtn.disabled=false; close(); }); };
+    const onCancel = ()=> close();
+    if (okBtn) okBtn.addEventListener('click', onOk);
+    if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
+    overlay.querySelectorAll('[data-confirm-cancel]').forEach(el=> el.addEventListener('click', onCancel));
+    document.addEventListener('keydown', onKey);
+    // Focus management
+    setTimeout(()=> { if (okBtn) okBtn.focus(); }, 30);
+}
+
+function proceedListDeletion(id, after=()=>{}) {
     fetch(`${API_BASE_URL}/lists/${id}`, { method:'DELETE' })
-      .then(r=>r.json().then(data=>({ok:r.ok,data})))
-      .then(({ok,data})=> { if(!ok) throw new Error(data.error||'Erreur'); showMessage('Liste supprimée','success'); loadLists(); updateStats(); if (listDetails) listDetails.style.display='none'; })
-      .catch(e=> showMessage(e.message,'error'));
+        .then(r=>r.json().then(data=>({ok:r.ok,data})))
+        .then(({ok,data})=> {
+             if(!ok) throw new Error(data.error||'Erreur');
+             showMessage('Liste supprimée','success');
+             after();
+             loadLists(); updateStats(); if (listDetails) listDetails.style.display='none';
+        })
+        .catch(e=> { showMessage(e.message,'error'); after(); });
 }
 
 async function handleCreateList(e) {
