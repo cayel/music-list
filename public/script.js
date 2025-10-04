@@ -105,6 +105,11 @@ let listEditMode = false;
 let listViewMode = 'list'; // 'list' | 'mosaic'
 let pendingOrder = null; // tableau d'ids list_item_id en attente de sauvegarde
 let pendingOrderListId = null;
+// Filtres / pagination listes
+let listFilterName = '';
+let listFilterTag = '';
+let listPage = 1;
+const LIST_PAGE_SIZE = 10;
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
@@ -133,6 +138,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!albumModal) albumModal = document.getElementById('albumModal');
     if (!albumModalBody) albumModalBody = document.getElementById('albumModalBody');
     const generateStudioForm = document.getElementById('generateStudioForm');
+    // Filtres listes
+    const listFilterNameInput = document.getElementById('listFilterName');
+    const listFilterTagInput = document.getElementById('listFilterTag');
+    const listFiltersClearBtn = document.getElementById('listFiltersClear');
+    if (listFilterNameInput) listFilterNameInput.addEventListener('input', () => { listFilterName = listFilterNameInput.value.trim().toLowerCase(); listPage=1; renderLists(); });
+    if (listFilterTagInput) listFilterTagInput.addEventListener('input', () => { listFilterTag = listFilterTagInput.value.trim().toLowerCase(); listPage=1; renderLists(); });
+    if (listFiltersClearBtn) listFiltersClearBtn.addEventListener('click', () => {
+        if (listFilterNameInput) listFilterNameInput.value='';
+        if (listFilterTagInput) listFilterTagInput.value='';
+        listFilterName=''; listFilterTag=''; listPage=1; renderLists();
+    });
     if (generateStudioForm) {
       const artistInput = document.getElementById('studioArtist');
       const statusEl = document.getElementById('generateStudioStatus');
@@ -827,12 +843,32 @@ async function loadLists() {
 
 function renderLists() {
     if (!listsContainer) return;
-    if (!lists.length) {
-        listsContainer.innerHTML = `<div class="empty-state" style="margin:0;">Aucune liste créée.</div>`;
-        return;
+    const paginationEl = document.getElementById('listsPagination');
+    const infoEl = document.getElementById('listsFilterInfo');
+    // Appliquer filtres
+    const filtered = lists.filter(l => {
+        const nameOk = !listFilterName || (l.name && l.name.toLowerCase().includes(listFilterName));
+        const tagOk = !listFilterTag || (Array.isArray(l.tags) && l.tags.some(t => t.toLowerCase().includes(listFilterTag)));
+        return nameOk && tagOk;
+    });
+    // Ajuster page si dépasse
+    const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
+    if (listPage > totalPages) listPage = totalPages;
+    if (listPage < 1) listPage = 1;
+    const start = (listPage - 1) * LIST_PAGE_SIZE;
+    const pageRows = filtered.slice(start, start + LIST_PAGE_SIZE);
+    if (infoEl) {
+        if (filtered.length !== lists.length || listFilterName || listFilterTag) {
+            infoEl.textContent = `${filtered.length} / ${lists.length}`;
+        } else { infoEl.textContent = ''; }
     }
-    // Vue compacte sous forme de lignes
-    const rows = lists.map(l => {
+    if (!filtered.length) {
+        listsContainer.innerHTML = `<div class="empty-state" style="margin:0;">Aucune liste créée.</div>`;
+        if (paginationEl) paginationEl.style.display='none';
+        return; 
+    }
+    // Vue compacte sous forme de lignes (page courante)
+    const rows = pageRows.map(l => {
         const tags = Array.isArray(l.tags) ? l.tags : [];
         const tagLine = tags.length ? tags.slice(0,6).map(t=>`<span class="mini-tag" title="Tag: ${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('') + (tags.length>6?`<span class="mini-tag more" title="+${tags.length-6} autres">+${tags.length-6}</span>`:'') : '';
         return `<tr data-list-id="${l.id}">
@@ -850,6 +886,30 @@ function renderLists() {
     listsContainer.querySelectorAll('.open-list').forEach(btn=> btn.addEventListener('click', ()=> loadListDetails(btn.dataset.id)) );
     listsContainer.querySelectorAll('.edit-list').forEach(btn=> btn.addEventListener('click', ()=> inlineRenameList(btn.dataset.id)) );
     listsContainer.querySelectorAll('.del-list').forEach(btn=> btn.addEventListener('click', ()=> deleteList(btn.dataset.id)) );
+    // Pagination UI
+    if (paginationEl) {
+        if (totalPages > 1) {
+            let html = '';
+            html += `<button type="button" ${listPage===1?'disabled':''} data-nav="prev">‹</button>`;
+            const windowSize = 5;
+            let startPage = Math.max(1, listPage - Math.floor(windowSize/2));
+            let endPage = startPage + windowSize -1;
+            if (endPage > totalPages) { endPage = totalPages; startPage = Math.max(1, endPage - windowSize +1); }
+            for (let p=startPage; p<=endPage; p++) {
+                html += `<button type="button" class="${p===listPage?'active':''}" data-page="${p}">${p}</button>`;
+            }
+            html += `<button type="button" ${listPage===totalPages?'disabled':''} data-nav="next">›</button>`;
+            paginationEl.innerHTML = html;
+            paginationEl.style.display='flex';
+            paginationEl.querySelectorAll('button[data-page]').forEach(b=> b.addEventListener('click', ()=> { listPage = parseInt(b.getAttribute('data-page'),10); renderLists(); }));
+            const prevBtn = paginationEl.querySelector('button[data-nav="prev"]');
+            const nextBtn = paginationEl.querySelector('button[data-nav="next"]');
+            if (prevBtn) prevBtn.addEventListener('click', ()=> { if (listPage>1) { listPage--; renderLists(); } });
+            if (nextBtn) nextBtn.addEventListener('click', ()=> { if (listPage<totalPages) { listPage++; renderLists(); } });
+        } else {
+            paginationEl.style.display='none';
+        }
+    }
 }
 
 function inlineRenameList(id) {

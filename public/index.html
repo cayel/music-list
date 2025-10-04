@@ -134,7 +134,14 @@
                         </div>
                     </div>
                     <h3 class="lists-subheading lists-subheading--divider" id="lists-existing-heading">Mes listes</h3>
+                    <div class="lists-filters" role="group" aria-label="Filtres listes">
+                        <input type="search" id="listFilterName" placeholder="Rechercher par nom..." aria-label="Filtre nom liste">
+                        <input type="search" id="listFilterTag" placeholder="Filtrer par tag..." aria-label="Filtre tag liste">
+                        <button type="button" id="listFiltersClear" class="sm-btn" aria-label="Réinitialiser filtres">Réinitialiser</button>
+                        <span id="listsFilterInfo" class="lists-filter-info" aria-live="polite"></span>
+                    </div>
                     <div id="listsContainer" class="lists-container" aria-labelledby="lists-existing-heading"></div>
+                    <div id="listsPagination" class="lists-pagination" aria-label="Pagination listes" style="display:none;"></div>
                     <div id="listDetails" class="list-details" style="display:none"></div>
                 </section>
                 <section class="stats-page" id="statsSection" style="display:none;">

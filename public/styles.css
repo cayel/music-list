@@ -650,6 +650,15 @@ footer.site-footer a:hover { text-decoration:underline; }
 .auto-tips summary { cursor:pointer; font-weight:600; letter-spacing:.05em; }
 .auto-criteria { margin:6px 0 0 14px; padding:0; list-style:disc; display:flex; flex-direction:column; gap:2px; }
 .auto-criteria li { margin:0; }
+/* Filtres listes + pagination */
+.lists-filters { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 14px; align-items:center; }
+.lists-filters input { padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-alt); font-size:.75rem; min-width:180px; }
+.lists-filters input:focus { outline:none; border-color:var(--accent); box-shadow:var(--focus-ring); }
+.lists-filter-info { font-size:.65rem; color:var(--text-soft); margin-left:auto; }
+.lists-pagination { display:flex; gap:6px; align-items:center; justify-content:flex-end; margin:14px 0 4px; flex-wrap:wrap; }
+.lists-pagination button { background:var(--bg-alt); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:.65rem; font-weight:600; cursor:pointer; }
+.lists-pagination button.active { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
+.lists-pagination button:hover:not(.active) { background:var(--hover-bg); }
 /* ===== Vue compacte des listes ===== */
 .lists-table-wrapper { overflow:auto; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--bg-elev); box-shadow:var(--shadow-sm); }
 .lists-table { width:100%; border-collapse:collapse; font-size:.85rem; }
