@@ -132,6 +132,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialiser références modal (présent après script dans le HTML)
     if (!albumModal) albumModal = document.getElementById('albumModal');
     if (!albumModalBody) albumModalBody = document.getElementById('albumModalBody');
+    const generateStudioForm = document.getElementById('generateStudioForm');
+    if (generateStudioForm) {
+      const artistInput = document.getElementById('studioArtist');
+      const statusEl = document.getElementById('generateStudioStatus');
+      generateStudioForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!artistInput.value.trim()) return;
+        statusEl.textContent = 'Génération…';
+        statusEl.className = 'generate-status pending';
+                try {
+                    const r = await fetch('/api/lists/generate/studio', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ artist: artistInput.value.trim() }) });
+                    let data = {};
+                    try { data = await r.json(); } catch { /* ignore parse */ }
+                    if (!r.ok) {
+                        if (r.status === 400) throw new Error(data.error || 'Requête invalide (400)');
+                        if (r.status === 429) throw new Error('Limite Discogs atteinte (429), réessayez plus tard');
+                        if (r.status === 502) throw new Error(data.error || 'Erreur serveur (502)');
+                        throw new Error(data.error || `Erreur (${r.status})`);
+                    }
+          statusEl.textContent = `Créée (${data.items.length} albums)`;
+          statusEl.className = 'generate-status success';
+          artistInput.value='';
+          // Rafraîchir listes
+          loadLists();
+          // Afficher les détails de la nouvelle liste automatiquement
+          if (data.list && data.list.id) {
+            setTimeout(()=> loadListDetails(data.list.id), 300);
+          }
+                } catch(e) {
+                    statusEl.textContent = e.message || 'Erreur inattendue';
+                    statusEl.className = 'generate-status error';
+                }
+      });
+    }
 });
 
     async function loadStatus() {

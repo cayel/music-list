@@ -262,6 +262,7 @@ Albums
 Listes
 - `GET /api/lists` – listes + tags + compte items
 - `POST /api/lists` – créer
+- `POST /api/lists/generate/studio` – génère automatiquement une liste "Album Studio <Artiste>" à partir des albums LOCAUX existants (filtrés studio, tri année croissante)
 - `GET /api/lists/:id` – détail + items ordonnés
 - `PUT /api/lists/:id` – maj nom / description
 - `DELETE /api/lists/:id` – supprimer

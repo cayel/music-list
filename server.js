@@ -446,6 +446,64 @@ app.delete('/api/lists/:id/items/:itemId', (req, res) => {
     });
 });
 
+// ================== GENERATION LISTE ALBUMS STUDIO ==================
+// Heuristique : recherche Discogs database search (type=release, format=album) triée par année ascendante.
+// Filtre des formats/ titres indiquant compilations, live, remix, best of, singles.
+// Création d'une liste nommée "Album Studio <Artiste>" avec description standard et tag "albums studio".
+app.post('/api/lists/generate/studio', async (req, res) => {
+    const { artist } = req.body || {};
+    const artistName = (artist || '').trim();
+    if (!artistName) return res.status(400).json({ error: 'artist requis' });
+    try {
+        // Récupération des albums locaux correspondant (recherche insensible à la casse, substring)
+        const like = `%${artistName.toLowerCase().replace(/%/g,'')}%`;
+        const sql = `SELECT * FROM albums WHERE lower(artist_name) LIKE ?`;
+        const rows = await new Promise((resolve, reject) => {
+            dbLayer.all(sql, [like], (err, r) => err ? reject(err) : resolve(r || []));
+        });
+        if (!rows.length) return res.status(404).json({ error: 'Aucun album local pour cet artiste' });
+        // Filtrage heuristique pour exclure compilations / live / remix
+        const denyTitle = /(live|remix|remastered|reissue|compilation|best\s*of|greatest|mix|dj\s*mix|single|ep|promo|anthology|collection)/i;
+        const filtered = rows.filter(r => !denyTitle.test(r.album_title || ''));
+        if (!filtered.length) return res.status(404).json({ error: 'Albums trouvés mais aucun ne passe le filtre studio' });
+        // Tri: année croissante (nulls à la fin), puis titre
+        filtered.sort((a,b)=>{
+            if (a.release_year && b.release_year && a.release_year !== b.release_year) return a.release_year - b.release_year;
+            if (a.release_year && !b.release_year) return -1;
+            if (!a.release_year && b.release_year) return 1;
+            return (a.album_title||'').localeCompare(b.album_title||'', 'fr');
+        });
+        const listName = `Album Studio ${artistName}`;
+        const listDescription = `Discographie ${artistName} - Albums Studio`;
+        const listId = await new Promise((resolve, reject) => {
+            dbLayer.run('INSERT INTO lists (name, description) VALUES (?,?)', [listName, listDescription], function (err) { if (err) return reject(err); resolve(this.lastID); });
+        });
+        logOperation('list.add', 'list', listId, { generated: 'studio.local', artist: artistName });
+        await new Promise(resolve => dbLayer.run('INSERT INTO list_tags (list_id, tag) VALUES (?,?)', [listId, 'albums studio'], () => resolve()));
+        // Insérer items
+        const itemInsert = `INSERT INTO list_items (list_id, album_id, position) VALUES (?,?,?)`;
+        for (let i=0;i<filtered.length;i++) {
+            const a = filtered[i];
+            await new Promise((resolve, reject) => {
+                dbLayer.run(itemInsert, [listId, a.id, i+1], function (err) { return err ? reject(err) : resolve(); });
+            });
+            logOperation('list_item.add', 'list', listId, { album_id: a.id, position: i+1, generate: 'studio.local' });
+        }
+        logOperation('list.generate.studio', 'list', listId, { artist: artistName, added: filtered.length, source: 'local' });
+        dbLayer.all('SELECT li.id as list_item_id, li.position, a.* FROM list_items li JOIN albums a ON li.album_id=a.id WHERE li.list_id=? ORDER BY li.position ASC', [listId], (liErr, items) => {
+            if (liErr) return res.status(500).json({ error: liErr.message });
+            res.json({
+                message: 'Liste studio générée (local)',
+                list: { id: listId, name: listName, description: listDescription, tags: ['albums studio'], item_count: items.length },
+                items,
+                meta: { artist: artistName, added: items.length, source: 'local' }
+            });
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Erreur génération locale' });
+    }
+});
+
 app.listen(PORT, () => console.log(`Serveur démarré sur http://localhost:${PORT}`));
 
 // ================== ADMIN (Export) ==================
