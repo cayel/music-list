@@ -102,6 +102,9 @@ let statusInfo = null;
 // État : mode édition des listes (permet réordonner / supprimer)
 let listEditMode = false;
 let listViewMode = 'list'; // 'list' | 'mosaic'
+let albumViewMode = 'grid'; // 'grid' | 'list'
+let albumPage = 1;
+const ALBUM_PAGE_SIZE = 20;
 let pendingOrder = null; // tableau d'ids list_item_id en attente de sauvegarde
 let pendingOrderListId = null;
 // Filtres / pagination listes
@@ -119,6 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initTheme();
     if (albumSearchInput) albumSearchInput.addEventListener('input', handleAlbumFilterInput);
+    const albumViewToggle = document.getElementById('albumViewToggle');
+    if (albumViewToggle) albumViewToggle.addEventListener('click', () => {
+        albumViewMode = albumViewMode === 'grid' ? 'list' : 'grid';
+        albumViewToggle.textContent = albumViewMode === 'grid' ? '🗃️' : '🟦';
+        renderAlbums();
+    });
     if (yearFilterInput) yearFilterInput.addEventListener('input', handleYearFilterChange);
     if (clearYearFilterBtn) clearYearFilterBtn.addEventListener('click', resetYearFilter);
     if (exportJsonBtn) exportJsonBtn.addEventListener('click', handleExportJson);
@@ -537,12 +546,32 @@ function renderAlbums() {
   if (filteredByYear.length === 0) {
     albumsContainer.style.display='none'; emptyState.style.display='block';
     emptyState.innerHTML = normalizedFilter ? '<p>Aucun album ne correspond à votre filtre.</p>' : (albums.length === 0 ? '<p>Votre collection est vide.</p>' : '<p>Aucun album pour cette année.</p>');
+        const pagElNone = document.getElementById('albumsPagination'); if (pagElNone) pagElNone.style.display='none';
     return;
   }
-  albumsContainer.style.display='grid'; emptyState.style.display='none';
-  albumsContainer.innerHTML = filteredByYear.map(a => createAlbumCard(a)).join('');
+    emptyState.style.display='none';
+    const totalPages = Math.ceil(filteredByYear.length / ALBUM_PAGE_SIZE) || 1;
+    if (albumPage > totalPages) albumPage = totalPages;
+    const start = (albumPage - 1) * ALBUM_PAGE_SIZE;
+    const pageSlice = filteredByYear.slice(start, start + ALBUM_PAGE_SIZE);
+    if (albumViewMode === 'grid') {
+        albumsContainer.classList.remove('albums-list-view');
+        albumsContainer.style.display='grid';
+        albumsContainer.innerHTML = pageSlice.map(a => createAlbumCard(a)).join('');
+    } else {
+        albumsContainer.style.display='block';
+        albumsContainer.classList.add('albums-list-view');
+        albumsContainer.innerHTML = `<table class="albums-table"><thead><tr><th>#</th><th>Pochette</th><th>Artiste</th><th>Album</th><th>Année</th><th>Label</th><th>ID</th><th></th></tr></thead><tbody>` +
+            pageSlice.map((a,i)=>`<tr data-album-id="${a.id}"><td>${start + i + 1}</td><td>${a.cover_image_url?`<img src="${a.cover_image_url}" alt="${escapeHtml(a.album_title)}" class="tbl-cover">`:'—'}</td><td>${escapeHtml(a.artist_name)}</td><td>${escapeHtml(a.album_title)}</td><td>${a.release_year||'—'}</td><td>${escapeHtml(a.label||'—')}</td><td>${a.release_id?('#'+a.release_id):'—'}</td><td><button class="tbl-open" data-open="1">Ouvrir</button> <button class="tbl-refresh" data-refresh="${a.id}">↻</button> <button class="tbl-delete" data-delete="${a.id}">✕</button></td></tr>`).join('') + '</tbody></table>';
+    }
   albumsContainer.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', e => { const id = e.currentTarget.getAttribute('data-album-id'); deleteAlbum(id); e.stopPropagation(); }));
   albumsContainer.querySelectorAll('.refresh-btn').forEach(btn => btn.addEventListener('click', e => { const id = e.currentTarget.getAttribute('data-album-id'); refreshAlbum(id); e.stopPropagation(); }));
+    if (albumViewMode === 'list') {
+        albumsContainer.querySelectorAll('button.tbl-delete').forEach(btn => btn.addEventListener('click', e => { const id = btn.getAttribute('data-delete'); deleteAlbum(id); e.stopPropagation(); }));
+        albumsContainer.querySelectorAll('button.tbl-refresh').forEach(btn => btn.addEventListener('click', e => { const id = btn.getAttribute('data-refresh'); refreshAlbum(id); e.stopPropagation(); }));
+        albumsContainer.querySelectorAll('tr[data-album-id] button.tbl-open').forEach(btn => btn.addEventListener('click', e => { const tr = btn.closest('tr'); const id = parseInt(tr.getAttribute('data-album-id'),10); const album = albums.find(a=>a.id===id); if(album) openAlbumModal(album); e.stopPropagation(); }));
+        albumsContainer.querySelectorAll('tr[data-album-id]').forEach(tr => tr.addEventListener('dblclick', e => { const id = parseInt(tr.getAttribute('data-album-id'),10); const album = albums.find(a=>a.id===id); if(album) openAlbumModal(album); }));
+    }
   albumsContainer.querySelectorAll('.album-tile').forEach(tile => {
     tile.addEventListener('click', e => {
       if (e.target.closest('.tile-actions')) return; // ignore action clicks
@@ -551,6 +580,33 @@ function renderAlbums() {
       if (album) openAlbumModal(album);
     });
   });
+    // Pagination UI
+    const pagEl = document.getElementById('albumsPagination');
+    if (pagEl) {
+        if (totalPages > 1) {
+            const windowSize = 5;
+            let startPage = Math.max(1, albumPage - Math.floor(windowSize/2));
+            let endPage = startPage + windowSize - 1;
+            if (endPage > totalPages) { endPage = totalPages; startPage = Math.max(1, endPage - windowSize + 1); }
+            let html = '<div class="pag-inner">';
+            html += `<button class="pag-btn" data-nav="prev" ${albumPage===1?'disabled':''}>‹</button>`;
+            for (let p=startPage; p<=endPage; p++) {
+                html += `<button class="pag-btn ${p===albumPage?'active':''}" data-page="${p}">${p}</button>`;
+            }
+            html += `<button class="pag-btn" data-nav="next" ${albumPage===totalPages?'disabled':''}>›</button>`;
+            html += `<span class="pag-meta">${filteredByYear.length} albums • Page ${albumPage}/${totalPages}</span>`;
+            html += '</div>';
+            pagEl.innerHTML = html;
+            pagEl.style.display='flex';
+            pagEl.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', e => { albumPage = parseInt(btn.getAttribute('data-page'),10); renderAlbums(); }));
+            const prevBtn = pagEl.querySelector('[data-nav="prev"]');
+            const nextBtn = pagEl.querySelector('[data-nav="next"]');
+            if (prevBtn) prevBtn.addEventListener('click', ()=>{ if(albumPage>1){ albumPage--; renderAlbums(); } });
+            if (nextBtn) nextBtn.addEventListener('click', ()=>{ if(albumPage<totalPages){ albumPage++; renderAlbums(); } });
+        } else {
+            pagEl.style.display='none';
+        }
+    }
 }
 
 function handleYearFilterChange() {

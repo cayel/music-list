@@ -460,6 +460,25 @@ header.app-header { margin-bottom:34px; }
 @media (max-width: 400px) {
   .albums-grid, .skeleton-grid { grid-template-columns:repeat(1,1fr); }
 }
+
+/* Vue liste albums */
+.albums-list-view { width:100%; }
+.albums-table { width:100%; border-collapse:collapse; font-size:.8rem; }
+.albums-table th { text-align:left; font-size:.65rem; text-transform:uppercase; letter-spacing:.08em; padding:6px 8px; border-bottom:1px solid var(--border); color:var(--text-soft); }
+.albums-table td { padding:6px 8px; border-bottom:1px solid var(--border-alt); vertical-align:middle; }
+.albums-table tbody tr:hover { background:var(--bg-alt); }
+.albums-table .tbl-cover { width:44px; height:44px; object-fit:cover; display:block; border:1px solid var(--border); }
+.albums-table button { background:var(--bg-alt); border:1px solid var(--border); padding:4px 8px; border-radius:6px; cursor:pointer; font-size:.7rem; }
+.albums-table button:hover { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
+
+/* Pagination albums */
+.albums-pagination { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
+.albums-pagination .pag-inner { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.albums-pagination .pag-btn { background:var(--bg-alt); border:1px solid var(--border); padding:6px 10px; border-radius:8px; cursor:pointer; font-size:.75rem; min-width:34px; }
+.albums-pagination .pag-btn.active { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
+.albums-pagination .pag-btn:hover:not(.active):not([disabled]) { background:var(--accent-muted); }
+.albums-pagination .pag-btn[disabled] { opacity:.4; cursor:default; }
+.albums-pagination .pag-meta { font-size:.7rem; opacity:.7; margin-left:4px; }
 .skeleton-tile { position:relative; aspect-ratio:1; border-radius:var(--radius-lg); background:var(--bg-alt); border:1px solid var(--border); overflow:hidden; }
 .skeleton-shimmer { position:absolute; inset:0; background:linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.45) 40%, rgba(255,255,255,0) 80%); animation:shimmer 1.4s infinite; opacity:.6; }
 [data-theme="dark"] .skeleton-shimmer { background:linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.12) 40%, rgba(255,255,255,0) 80%); }

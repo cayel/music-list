@@ -66,6 +66,7 @@
                     <div class="section-heading">
                         <h2>Les albums</h2>
                         <div class="album-toolbar">
+                            <button type="button" id="albumViewToggle" class="btn-ghost" aria-label="Basculer vue" title="Basculer vue mosaïque / liste">🗃️</button>
                             <label for="albumSearch" class="sr-only">Filtrer les albums</label>
                             <input type="search" id="albumSearch" placeholder="Filtrer par artiste, album ou label…" autocomplete="off">
                             <div class="year-filter" aria-label="Filtrer par année de parution">
@@ -77,6 +78,7 @@
                     <div id="albumsContainer" class="albums-grid">
                         <!-- Les albums seront affichés ici -->
                     </div>
+                    <div id="albumsPagination" class="albums-pagination" aria-label="Pagination albums" style="display:none; margin-top:12px;"></div>
                     <div id="emptyState" class="empty-state" style="display: none;">
                         <p>Votre collection est vide. Ajoutez votre premier album !</p>
                     </div>
