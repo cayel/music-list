@@ -853,16 +853,64 @@ function renderLists() {
 }
 
 function inlineRenameList(id) {
+    const row = listsContainer && listsContainer.querySelector(`tr[data-list-id="${id}"]`);
+    if (!row) return;
+    // Empêcher multi-édition
+    if (row.classList.contains('editing')) return;
+    row.classList.add('editing');
     const list = lists.find(l=> String(l.id)===String(id));
-    if (!list) return;
-    const newName = prompt('Nouveau nom de la liste', list.name);
-    if (newName == null) return;
-    const trimmed = newName.trim();
-    if (!trimmed) return alert('Nom vide');
-    fetch(`${API_BASE_URL}/lists/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: trimmed }) })
-      .then(r=>r.json().then(data=>({ok:r.ok,data})))
-      .then(({ok,data})=> { if(!ok) throw new Error(data.error||'Erreur'); loadLists(); showMessage('Liste renommée','success'); })
-      .catch(e=> showMessage(e.message,'error'));
+    const nameCell = row.querySelector('.c-name');
+    const actionsCell = row.querySelector('.c-actions');
+    if (!nameCell || !actionsCell) return;
+    const originalName = list ? list.name : '';
+    // Sauvegarde du contenu original pour annulation
+    const originalNameHtml = nameCell.innerHTML;
+    const originalActionsHtml = actionsCell.innerHTML;
+    // Construire l'éditeur inline
+    nameCell.innerHTML = `<form class="rename-inline-form" data-id="${id}" onsubmit="return false;">
+        <input type="text" class="list-rename-input" value="${escapeHtml(originalName)}" aria-label="Nouveau nom liste">
+    </form>`;
+    actionsCell.innerHTML = `<div class="rename-actions">
+        <button class="sm-btn save-rename" title="Sauver" aria-label="Sauver">✔</button>
+        <button class="sm-btn cancel-rename" title="Annuler" aria-label="Annuler">↺</button>
+    </div>`;
+    const input = nameCell.querySelector('.list-rename-input');
+    input.focus(); input.select();
+    const finish = (restoreOnly=false) => {
+        if (restoreOnly) {
+            nameCell.innerHTML = originalNameHtml;
+            actionsCell.innerHTML = originalActionsHtml;
+            row.classList.remove('editing');
+            // Rebind actions sur ce row (car HTML restauré)
+            const editBtn = row.querySelector('.edit-list');
+            if (editBtn) editBtn.addEventListener('click', ()=> inlineRenameList(id));
+            const delBtn = row.querySelector('.del-list');
+            if (delBtn) delBtn.addEventListener('click', ()=> deleteList(id));
+            const openBtn = row.querySelector('.open-list');
+            if (openBtn) openBtn.addEventListener('click', ()=> loadListDetails(id));
+            return;
+        }
+        // Reload complet pour cohérence (tags, counts)
+        loadLists();
+        updateStats();
+    };
+    const submit = () => {
+        const newVal = input.value.trim();
+        if (!newVal) { showMessage('Nom vide','error'); return; }
+        if (newVal === originalName) { finish(true); return; }
+        actionsCell.querySelector('.save-rename').disabled = true;
+        fetch(`${API_BASE_URL}/lists/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newVal }) })
+            .then(r=>r.json().then(data=>({ok:r.ok,data})))
+            .then(({ok,data})=> { if(!ok) throw new Error(data.error||'Erreur'); showMessage('Liste renommée','success'); finish(); })
+            .catch(e=> { showMessage(e.message,'error'); actionsCell.querySelector('.save-rename').disabled = false; });
+    };
+    // Events
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(true); }
+    });
+    actionsCell.querySelector('.save-rename').addEventListener('click', submit);
+    actionsCell.querySelector('.cancel-rename').addEventListener('click', ()=> finish(true));
 }
 
 function deleteList(id) {

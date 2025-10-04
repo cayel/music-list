@@ -649,6 +649,12 @@ footer.site-footer a:hover { text-decoration:underline; }
 .mini-tag.more { background:var(--bg-alt); border:1px solid var(--border); }
 .no-tags { opacity:.4; }
 @media (max-width:700px) { .lists-table th:nth-child(3), .lists-table td:nth-child(3) { display:none; } }
+/* Inline rename */
+.rename-inline-form { display:flex; }
+.list-rename-input { flex:1; padding:6px 8px; font-size:.75rem; border:1px solid var(--border); border-radius:6px; background:var(--bg-alt); color:var(--text); }
+.list-rename-input:focus { outline:none; border-color:var(--accent); box-shadow:var(--focus-ring); }
+.rename-actions { display:flex; gap:4px; }
+tr.editing { background:var(--hover-bg); }
 
 /* Génération liste studio */
 .generate-status { font-size:.7rem; font-weight:600; letter-spacing:.06em; padding:6px 10px; border-radius:var(--radius-sm); align-self:center; }
