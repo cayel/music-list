@@ -827,24 +827,50 @@ async function loadLists() {
 
 function renderLists() {
     if (!listsContainer) return;
-    listsContainer.innerHTML = lists.map(l => {
+    if (!lists.length) {
+        listsContainer.innerHTML = `<div class="empty-state" style="margin:0;">Aucune liste créée.</div>`;
+        return;
+    }
+    // Vue compacte sous forme de lignes
+    const rows = lists.map(l => {
         const tags = Array.isArray(l.tags) ? l.tags : [];
-        const tagBadges = tags.length > 0
-            ? `<div class="badge-tags">${tags.slice(0, 4).map(t => `<span class="badge-tag" title="Tag: ${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}${tags.length > 4 ? `<span class="badge-tag more" title="+${tags.length - 4} autre(s)">+${tags.length - 4}</span>` : ''}</div>`
-            : '';
-        return `
-            <div class="list-badge" data-list-id="${l.id}">
-                <div class="lb-title">${escapeHtml(l.name)}</div>
-                <div class="lb-meta"><small>${l.item_count} item(s)</small></div>
-                ${tagBadges}
-            </div>`;
+        const tagLine = tags.length ? tags.slice(0,6).map(t=>`<span class="mini-tag" title="Tag: ${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('') + (tags.length>6?`<span class="mini-tag more" title="+${tags.length-6} autres">+${tags.length-6}</span>`:'') : '';
+        return `<tr data-list-id="${l.id}">
+            <td class="c-name"><button type="button" class="link-btn open-list" data-id="${l.id}" title="Ouvrir la liste">${escapeHtml(l.name)}</button></td>
+            <td class="c-count">${l.item_count}</td>
+            <td class="c-tags">${tagLine || '<span class="no-tags">—</span>'}</td>
+            <td class="c-actions">
+                <button class="sm-btn edit-list" data-id="${l.id}" title="Renommer">✎</button>
+                <button class="sm-btn del-list" data-id="${l.id}" title="Supprimer">🗑️</button>
+            </td>
+        </tr>`;
     }).join('');
-    listsContainer.querySelectorAll('.list-badge').forEach(div => {
-        div.addEventListener('click', () => {
-            const id = div.getAttribute('data-list-id');
-            loadListDetails(id);
-        });
-    });
+    listsContainer.innerHTML = `<div class="lists-table-wrapper"><table class="lists-table"><thead><tr><th>Nom</th><th>Albums</th><th>Tags</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    // Bind actions
+    listsContainer.querySelectorAll('.open-list').forEach(btn=> btn.addEventListener('click', ()=> loadListDetails(btn.dataset.id)) );
+    listsContainer.querySelectorAll('.edit-list').forEach(btn=> btn.addEventListener('click', ()=> inlineRenameList(btn.dataset.id)) );
+    listsContainer.querySelectorAll('.del-list').forEach(btn=> btn.addEventListener('click', ()=> deleteList(btn.dataset.id)) );
+}
+
+function inlineRenameList(id) {
+    const list = lists.find(l=> String(l.id)===String(id));
+    if (!list) return;
+    const newName = prompt('Nouveau nom de la liste', list.name);
+    if (newName == null) return;
+    const trimmed = newName.trim();
+    if (!trimmed) return alert('Nom vide');
+    fetch(`${API_BASE_URL}/lists/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: trimmed }) })
+      .then(r=>r.json().then(data=>({ok:r.ok,data})))
+      .then(({ok,data})=> { if(!ok) throw new Error(data.error||'Erreur'); loadLists(); showMessage('Liste renommée','success'); })
+      .catch(e=> showMessage(e.message,'error'));
+}
+
+function deleteList(id) {
+    if (!confirm('Supprimer cette liste ?')) return;
+    fetch(`${API_BASE_URL}/lists/${id}`, { method:'DELETE' })
+      .then(r=>r.json().then(data=>({ok:r.ok,data})))
+      .then(({ok,data})=> { if(!ok) throw new Error(data.error||'Erreur'); showMessage('Liste supprimée','success'); loadLists(); updateStats(); if (listDetails) listDetails.style.display='none'; })
+      .catch(e=> showMessage(e.message,'error'));
 }
 
 async function handleCreateList(e) {

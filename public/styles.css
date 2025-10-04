@@ -634,3 +634,24 @@ footer.site-footer a:hover { text-decoration:underline; }
 .copy-release-btn { background:var(--bg-alt); color:var(--text); border:1px solid var(--border); padding:8px 14px; border-radius:6px; font-size:.75rem; font-weight:600; cursor:pointer; transition:var(--transition); }
 .copy-release-btn:hover { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
 .copy-release-btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+/* ===== Vue compacte des listes ===== */
+.lists-table-wrapper { overflow:auto; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--bg-elev); box-shadow:var(--shadow-sm); }
+.lists-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+.lists-table th, .lists-table td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--border-faint); }
+.lists-table thead th { font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; color:var(--text-soft); }
+.lists-table tbody tr:last-child td { border-bottom:none; }
+.lists-table tbody tr:hover { background:var(--hover-bg); }
+.link-btn { background:none; border:none; padding:0; color:var(--accent-accent); cursor:pointer; font: inherit; text-align:left; }
+.link-btn:hover { text-decoration:underline; }
+.sm-btn { background:var(--bg-alt); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:.7rem; cursor:pointer; margin-right:4px; }
+.sm-btn:hover { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
+.mini-tag { display:inline-block; background:var(--accent-muted); color:var(--accent-accent); padding:3px 6px; font-size:.55rem; border-radius:999px; margin:2px 4px 2px 0; font-weight:600; letter-spacing:.05em; }
+.mini-tag.more { background:var(--bg-alt); border:1px solid var(--border); }
+.no-tags { opacity:.4; }
+@media (max-width:700px) { .lists-table th:nth-child(3), .lists-table td:nth-child(3) { display:none; } }
+
+/* Génération liste studio */
+.generate-status { font-size:.7rem; font-weight:600; letter-spacing:.06em; padding:6px 10px; border-radius:var(--radius-sm); align-self:center; }
+.generate-status.pending { background:var(--accent-muted); color:var(--accent-accent); }
+.generate-status.success { background:#d1f5e4; color:#1f6b45; }
+.generate-status.error { background:#fde3e2; color:#862022; }
