@@ -148,11 +148,15 @@
                             <h3>Évolution par année</h3>
                             <canvas id="yearChart" width="900" height="220" aria-label="Histogramme des albums par année" role="img"></canvas>
                             <div class="chart-legend" id="yearChartLegend"></div>
+                            <div class="year-chart-results" id="yearChartResults" aria-live="polite" style="margin-top:.8rem; display:none;"></div>
                         </div>
                         <div class="chart-card">
                             <h3>Genres / Styles (Top 12)</h3>
                             <canvas id="genreChart" width="900" height="220" aria-label="Diagramme des genres les plus fréquents" role="img"></canvas>
                             <div class="chart-legend" id="genreChartLegend"></div>
+                            <div class="genre-chart-results" id="genreChartResults" aria-live="polite" style="margin-top:.8rem; display:none;">
+                                <!-- Résultats dynamiques genre/style -->
+                            </div>
                         </div>
                         <div class="chart-card">
                             <h3>Artistes (Top 12)</h3>

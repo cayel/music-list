@@ -1753,6 +1753,8 @@ function drawYearChart(yearDist) {
         const color = decadeMap.get(decade) || '#3b82f6';
         ctx.fillStyle = color;
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, barW, barH, 3) : ctx.rect(x,y,barW,barH); ctx.fill();
+        if (!canvas._bars) canvas._bars = [];
+        canvas._bars.push({ year, x, y, w:barW, h:barH });
     if (last.length <= 16 || i % 2 === 0) {
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim') || '#555';
       ctx.save();
@@ -1776,7 +1778,41 @@ function drawYearChart(yearDist) {
             return `<span class="legend-item"><span class="legend-swatch" style="background:${col}"></span>${label}</span>`;
         }).join('');
     }
+
+        if (!canvas._clickBound) {
+            canvas.addEventListener('click', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const cx = e.clientX - rect.left;
+                const cy = e.clientY - rect.top;
+                const hit = (canvas._bars||[]).find(b => cx>=b.x && cx<=b.x+b.w && cy>=b.y && cy<=b.y+b.h);
+                if (hit) showYearResults(hit.year);
+            });
+            canvas._clickBound = true;
+        }
 }
+
+    function showYearResults(year) {
+        const resultsEl = document.getElementById('yearChartResults');
+        if (!resultsEl) return;
+        const matched = albums.filter(a => a.release_year === year);
+        if (!matched.length) {
+            resultsEl.style.display='block';
+            resultsEl.innerHTML = `<h4>${year}</h4><div class="year-results-meta">Aucun album trouvé pour ${year}.</div>`;
+            return;
+        }
+        const tiles = matched.slice(0,200).map(a => {
+            const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="${escapeHtml(a.album_title)} – ${escapeHtml(a.artist_name)}">` : '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:1.6rem;">🎵</div>';
+            return `<div class="yr-tile" data-album-id="${a.id}" title="${escapeHtml(a.artist_name)} – ${escapeHtml(a.album_title)}">${cover}</div>`;
+        }).join('');
+        resultsEl.style.display='block';
+        resultsEl.innerHTML = `<h4>${year} (${matched.length})</h4><div class="year-results-grid">${tiles}</div><div class="year-results-meta">Cliquez une pochette pour ouvrir l'album. ${matched.length>200?'Limité à 200. ':''}<button type="button" class="sm-btn" id="yearResultsClose">Fermer</button></div>`;
+        resultsEl.querySelectorAll('.yr-tile').forEach(tile => tile.addEventListener('click', () => {
+            const id = parseInt(tile.getAttribute('data-album-id'),10);
+            const album = albums.find(a=>a.id===id); if (album) openAlbumModal(album);
+        }));
+        const closeBtn = document.getElementById('yearResultsClose');
+        if (closeBtn) closeBtn.addEventListener('click', () => { resultsEl.style.display='none'; resultsEl.innerHTML=''; });
+    }
 
 function drawGenreChart(genreCounts) {
   const canvas = document.getElementById('genreChart');
@@ -1826,7 +1862,51 @@ function drawGenreChart(genreCounts) {
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim') || '#555';
     ctx.textAlign = 'left';
     ctx.fillText(String(val), x + bw + 6, yMid);
+        // Stocker zone interactive
+        if (!canvas._bars) canvas._bars = [];
+        canvas._bars.push({ name, x, y, w:bw, h:barH, yMid });
   });
+
+    // Interaction clic (une seule installation)
+    if (!canvas._clickBound) {
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const cx = e.clientX - rect.left;
+            const cy = e.clientY - rect.top;
+            const hit = (canvas._bars||[]).find(b => cx>=b.x && cx<=b.x+b.w && cy>=b.y && cy<=b.y+b.h);
+            if (hit) {
+                showGenreResults(hit.name);
+            }
+        });
+        canvas._clickBound = true;
+    }
+}
+
+function showGenreResults(genreName) {
+    const resultsEl = document.getElementById('genreChartResults');
+    if (!resultsEl) return;
+    const norm = genreName.toLowerCase();
+    const matched = albums.filter(a => {
+        const g = (a.genre||'') + ' ' + (a.style||'');
+        return g.toLowerCase().split(/[,/]/).map(s=>s.trim()).includes(norm);
+    });
+    if (!matched.length) {
+        resultsEl.style.display='block';
+        resultsEl.innerHTML = `<h4>${escapeHtml(genreName)}</h4><div class="genre-results-meta">Aucun album trouvé pour ce genre/style.</div>`;
+        return;
+    }
+    const tiles = matched.slice(0,120).map(a => {
+        const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="${escapeHtml(a.album_title)} – ${escapeHtml(a.artist_name)}">` : '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:1.6rem;">🎵</div>';
+        return `<div class="gr-tile" data-album-id="${a.id}" title="${escapeHtml(a.artist_name)} – ${escapeHtml(a.album_title)}">${cover}</div>`;
+    }).join('');
+    resultsEl.style.display='block';
+    resultsEl.innerHTML = `<h4>${escapeHtml(genreName)} (${matched.length})</h4><div class="genre-results-grid">${tiles}</div><div class="genre-results-meta">Cliquez une pochette pour ouvrir les détails. ${matched.length>120? 'Affichage limité à 120.' : ''} <button type="button" class="sm-btn" id="genreResultsClose">Fermer</button></div>`;
+    resultsEl.querySelectorAll('.gr-tile').forEach(tile => tile.addEventListener('click', () => {
+        const id = parseInt(tile.getAttribute('data-album-id'),10);
+        const album = albums.find(a=>a.id===id); if (album) openAlbumModal(album);
+    }));
+    const closeBtn = document.getElementById('genreResultsClose');
+    if (closeBtn) closeBtn.addEventListener('click', () => { resultsEl.style.display='none'; resultsEl.innerHTML=''; });
 }
 function drawArtistChart(artistCounts) {
     const canvas = document.getElementById('artistChart');

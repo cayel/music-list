@@ -667,6 +667,22 @@ footer.site-footer a:hover { text-decoration:underline; }
 .chart-legend .legend-item { display:flex; align-items:center; font-size:0.7rem; gap:0.3rem; background:var(--panel-bg-strong); padding:0.25rem 0.4rem; border-radius:6px; }
 .chart-legend .legend-swatch { width:12px; height:12px; border-radius:3px; box-shadow:0 0 0 1px var(--border); }
 .canvas-inline-text { font: 11px system-ui, sans-serif; fill: var(--text-dim); }
+/* Résultats clic genre */
+.genre-chart-results { border:1px solid var(--border); background:var(--panel-bg); border-radius:10px; padding:12px 14px 16px; }
+.genre-chart-results h4 { margin:0 0 10px; font-size:.85rem; text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); }
+.genre-results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:10px; }
+.genre-results-grid .gr-tile { position:relative; aspect-ratio:1; border:1px solid var(--border); background:var(--bg-alt); overflow:hidden; border-radius:6px; cursor:pointer; box-shadow:var(--shadow-sm); }
+.genre-results-grid .gr-tile img { width:100%; height:100%; object-fit:cover; display:block; }
+.genre-results-grid .gr-tile:hover { transform:translateY(-3px); box-shadow:var(--shadow); }
+.genre-results-meta { margin-top:8px; font-size:.6rem; color:var(--text-soft); letter-spacing:.05em; }
+/* Résultats clic année */
+.year-chart-results { border:1px solid var(--border); background:var(--panel-bg); border-radius:10px; padding:12px 14px 16px; }
+.year-chart-results h4 { margin:0 0 10px; font-size:.85rem; text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); }
+.year-results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:10px; }
+.year-results-grid .yr-tile { position:relative; aspect-ratio:1; border:1px solid var(--border); background:var(--bg-alt); overflow:hidden; border-radius:6px; cursor:pointer; box-shadow:var(--shadow-sm); }
+.year-results-grid .yr-tile img { width:100%; height:100%; object-fit:cover; display:block; }
+.year-results-grid .yr-tile:hover { transform:translateY(-3px); box-shadow:var(--shadow); }
+.year-results-meta { margin-top:8px; font-size:.6rem; color:var(--text-soft); letter-spacing:.05em; }
 /* Stat Widgets (top of stats page) */
 .stats-widgets { display:flex; gap:18px; flex-wrap:wrap; margin:0 0 24px; }
 .stat-widget { flex:0 1 160px; background:var(--panel-bg); border:1px solid var(--border); border-radius:14px; padding:16px 18px 14px; display:flex; flex-direction:column; gap:4px; box-shadow:var(--shadow-sm); position:relative; }
