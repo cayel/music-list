@@ -480,6 +480,13 @@ header.app-header { margin-bottom:34px; }
 .albums-pagination .pag-btn[disabled] { opacity:.4; cursor:default; }
 .albums-pagination .pag-meta { font-size:.7rem; opacity:.7; margin-left:4px; }
 
+/* List mosaic using album tiles */
+.list-albums-grid { margin-top:20px; }
+.list-album-wrapper { position:relative; }
+.list-album-wrapper .overlay-remove { position:absolute; top:6px; left:6px; background:var(--danger); color:var(--accent-contrast); border:none; width:26px; height:26px; border-radius:50%; cursor:pointer; font-size:14px; box-shadow:var(--shadow-sm); opacity:0; transition:var(--transition); display:flex; align-items:center; justify-content:center; }
+.list-album-wrapper:hover .overlay-remove { opacity:1; }
+.list-album-wrapper .overlay-remove:hover { background:var(--danger-hover); }
+
 /* Confirmation Dialog */
 .confirm-overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:1200; backdrop-filter:blur(4px); }
 .confirm-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }

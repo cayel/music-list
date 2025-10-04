@@ -1165,18 +1165,11 @@ function renderListDetails(list) {
                     </div>
                 `).join('')}
             </div>` : `
-            <div class="mosaic-grid">
+            <div class="albums-grid list-albums-grid" data-mode="mosaic">
                 ${list.items.map(it => {
-                    const cover = it.cover_image_url ? `<img src="${it.cover_image_url}" alt="Pochette ${escapeHtml(it.album_title)}" class="mosaic-cover" loading="lazy">` : `<div class=\"mosaic-cover placeholder\">🎵</div>`;
-                    return `<div class="mosaic-card" data-li-id="${it.list_item_id}">
-                        ${cover}
-                        <div class="mosaic-meta">
-                            <div class="mosaic-title" title="${escapeHtml(it.album_title)}">${escapeHtml(it.album_title)}</div>
-                            <div class="mosaic-artist">${escapeHtml(it.artist_name)}</div>
-                            <div class="mosaic-year">${it.release_year || ''}</div>
-                        </div>
-                        ${listEditMode ? `<button class=\"remove-list-item mosaic-remove\" data-li-id=\"${it.list_item_id}\" title=\"Retirer\">×</button>` : ''}
-                    </div>`;
+                    // On adapte la structure attendue par createAlbumCard
+                    const fakeAlbum = { id: it.album_id, album_title: it.album_title, artist_name: it.artist_name, release_year: it.release_year, cover_image_url: it.cover_image_url, list_usage_count: 1 };
+                    return `<div class="list-album-wrapper" data-li-id="${it.list_item_id}">${createAlbumCard(fakeAlbum)}${listEditMode ? `<button class='remove-list-item overlay-remove' data-li-id='${it.list_item_id}' title='Retirer de la liste'>×</button>`:''}</div>`;
                 }).join('')}
             </div>`}
     `;
@@ -1188,6 +1181,14 @@ function renderListDetails(list) {
     if (listEditMode) {
         listDetails.querySelectorAll('.remove-list-item').forEach(btn => {
             btn.addEventListener('click', () => {
+                const liId = btn.getAttribute('data-li-id');
+                removeListItem(list.id, liId);
+            });
+        });
+        // Bind spécifique pour vue mosaïque utilisant album tiles
+        listDetails.querySelectorAll('.list-album-wrapper .overlay-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const liId = btn.getAttribute('data-li-id');
                 removeListItem(list.id, liId);
             });
