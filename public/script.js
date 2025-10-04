@@ -778,8 +778,9 @@ function createAlbumCard(album) { // modified to add data-album-id
     const usedCount = album.list_usage_count || 0; const cannotDelete = usedCount > 0;
     const deleteTitle = cannotDelete ? `Album utilisé dans ${usedCount} liste(s)` : 'Supprimer cet album';
     const coverImage = album.cover_image_url ? `<img src="${album.cover_image_url}" alt="Pochette de ${safeTitle}" class="album-cover">` : `<div class="album-cover cover-placeholder" role="img">🎵</div>`;
-    const tileLabel = `${album.artist_name} – ${album.album_title}${year && year !== 'Année inconnue' ? ` (${year})` : ''}`;
-    return `
+        const tileLabel = `${album.artist_name} – ${album.album_title}${year && year !== 'Année inconnue' ? ` (${year})` : ''}`;
+        const appleUrl = buildAppleMusicUrl(album.artist_name, album.album_title);
+        return `
       <article class="album-tile ${cannotDelete ? 'in-use' : ''}" data-album-id="${album.id}" aria-label="${escapeHtml(tileLabel)}">
         <div class="tile-actions">
           <button class="refresh-btn" data-album-id="${album.id}" title="Rafraîchir depuis Discogs">⟳</button>
@@ -791,6 +792,7 @@ function createAlbumCard(album) { // modified to add data-album-id
             <p class="tile-artist">${safeArtist}</p>
             <h3 class="tile-title">${safeTitle}</h3>
           </div>
+                    <div class="tile-footer-links"><a href="${appleUrl}" target="_blank" rel="noopener" class="apple-link" title="Écouter sur Apple Music"> Music</a></div>
         </div>
       </article>`;
 }
@@ -836,6 +838,34 @@ function closeAlbumModal() {
 
 function escModalHandler(e){ if (e.key === 'Escape') closeAlbumModal(); }
 
+// Génération d'une URL Apple Music (recherche globale) basée sur artiste + album
+function buildAppleMusicUrl(artist, album) {
+    function sanitize(str) {
+        if (!str) return '';
+        let s = String(str);
+        // Retirer contenu entre parenthèses ou crochets sauf si c'est uniquement une année (4 chiffres)
+        s = s.replace(/\((?!(?:19|20)\d{2}\))[^)]*\)/g,'');
+        s = s.replace(/\[(?!(?:19|20)\d{2}\])[^]]*\]/g,'');
+        // Retirer mots-clés marketing fréquents
+        s = s.replace(/\b(deluxe|remaster(?:ed)?|expanded|special edition|anniversary|version|édition limitée)\b/gi,'');
+        // Normaliser espaces
+        s = s.replace(/[-–]+/g,' ');
+        s = s.replace(/\s{2,}/g,' ');
+        // Trim
+        s = s.trim();
+        // Diacritiques (Apple Music tolère mais on renforce la correspondance)
+        try { s = s.normalize('NFD').replace(/\p{Diacritic}/gu,''); } catch(_){}
+        return s;
+    }
+    const cleanArtist = sanitize(artist);
+    const cleanAlbum = sanitize(album);
+    const base = `${cleanArtist} ${cleanAlbum}`.trim();
+    const short = base.length > 90 ? base.slice(0,90) : base;
+    const locale = (navigator.language || 'en-US').slice(0,2).toLowerCase();
+    const q = encodeURIComponent(short);
+    return `https://music.apple.com/${locale}/search?term=${q}`;
+}
+
 function buildAlbumModalContent(a) {
   const safeTitle = escapeHtml(a.album_title); const safeArtist = escapeHtml(a.artist_name);
     const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="Pochette ${safeTitle}" class="modal-cover-img" data-zoomable="1">` : `<div class="cover-placeholder" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:4rem;">🎵</div>`;
@@ -862,10 +892,11 @@ function buildAlbumModalContent(a) {
         <h3>${safeTitle}</h3>
       </div>
       <ul class="album-meta-list">${metaHtml}</ul>
-      <div class="album-modal-actions">
+            <div class="album-modal-actions">
                 ${discogsLink ? `<a href="${discogsLink}" target="_blank" rel="noopener" title="Ouvrir sur Discogs">Discogs ↗</a>` : ''}
                 ${a.release_id ? `<button type="button" class="copy-release-btn" data-relid="${a.release_id}" title="Copier Release ID">Copier ID</button>` : ''}
-      </div>
+                <a href="${appleUrl}" target="_blank" rel="noopener" title="Écouter sur Apple Music" class="apple-link strong"> Music</a>
+            </div>
       ${tracklistHtml}
     </div>`;
 }
@@ -1836,7 +1867,8 @@ function drawYearChart(yearDist) {
         }
         const tiles = matched.slice(0,200).map(a => {
             const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="${escapeHtml(a.album_title)} – ${escapeHtml(a.artist_name)}">` : '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:1.6rem;">🎵</div>';
-            return `<div class="yr-tile" data-album-id="${a.id}" title="${escapeHtml(a.artist_name)} – ${escapeHtml(a.album_title)}">${cover}</div>`;
+            const appleUrl = buildAppleMusicUrl(a.artist_name, a.album_title);
+            return `<div class="yr-tile" data-album-id="${a.id}" title="${escapeHtml(a.artist_name)} – ${escapeHtml(a.album_title)}">${cover}<a class="mini-apple" href="${appleUrl}" target="_blank" rel="noopener" title="Apple Music"></a></div>`;
         }).join('');
         resultsEl.style.display='block';
         resultsEl.innerHTML = `<h4>${year} (${matched.length})</h4><div class="year-results-grid">${tiles}</div><div class="year-results-meta">Cliquez une pochette pour ouvrir l'album. ${matched.length>200?'Limité à 200. ':''}<button type="button" class="sm-btn" id="yearResultsClose">Fermer</button></div>`;
@@ -1931,7 +1963,8 @@ function showGenreResults(genreName) {
     }
     const tiles = matched.slice(0,120).map(a => {
         const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="${escapeHtml(a.album_title)} – ${escapeHtml(a.artist_name)}">` : '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:1.6rem;">🎵</div>';
-        return `<div class="gr-tile" data-album-id="${a.id}" title="${escapeHtml(a.artist_name)} – ${escapeHtml(a.album_title)}">${cover}</div>`;
+        const appleUrl = buildAppleMusicUrl(a.artist_name, a.album_title);
+        return `<div class="gr-tile" data-album-id="${a.id}" title="${escapeHtml(a.artist_name)} – ${escapeHtml(a.album_title)}">${cover}<a class="mini-apple" href="${appleUrl}" target="_blank" rel="noopener" title="Apple Music"></a></div>`;
     }).join('');
     resultsEl.style.display='block';
     resultsEl.innerHTML = `<h4>${escapeHtml(genreName)} (${matched.length})</h4><div class="genre-results-grid">${tiles}</div><div class="genre-results-meta">Cliquez une pochette pour ouvrir les détails. ${matched.length>120? 'Affichage limité à 120.' : ''} <button type="button" class="sm-btn" id="genreResultsClose">Fermer</button></div>`;
