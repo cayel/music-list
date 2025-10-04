@@ -392,6 +392,7 @@ function initNavigation() {
     const listsSection = document.getElementById('listsSection');
     const adminSection = document.getElementById('adminSection');
     const statsSectionEl = document.getElementById('statsSection');
+    const statsBar = document.getElementById('statsBar');
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -403,22 +404,26 @@ function initNavigation() {
                 listsSection.style.display = 'none';
                 if (adminSection) adminSection.style.display='none';
                 if (statsSectionEl) statsSectionEl.style.display='none';
+                if (statsBar) statsBar.style.display='grid';
             } else {
                 if (target === 'lists') {
                     albumsSection.style.display = 'none';
                     listsSection.style.display = '';
                     if (adminSection) adminSection.style.display='none';
                     if (statsSectionEl) statsSectionEl.style.display='none';
+                    if (statsBar) statsBar.style.display='none';
                 } else if (target === 'admin') {
                     albumsSection.style.display = 'none';
                     listsSection.style.display = 'none';
                     if (adminSection) adminSection.style.display='';
                     if (statsSectionEl) statsSectionEl.style.display='none';
+                    if (statsBar) statsBar.style.display='none';
                 } else if (target === 'stats') {
                     albumsSection.style.display = 'none';
                     listsSection.style.display = 'none';
                     if (adminSection) adminSection.style.display='none';
                     if (statsSectionEl) { statsSectionEl.style.display=''; renderStatsPage(); }
+                    if (statsBar) statsBar.style.display='none';
                 }
             }
         });
@@ -426,6 +431,8 @@ function initNavigation() {
     // Forcer l'état initial
     if (adminSection) adminSection.style.display='none';
     if (statsSectionEl) statsSectionEl.style.display='none';
+    // État initial: statsBar visible seulement sur l'onglet Albums
+    if (statsBar) statsBar.style.display='grid';
 }
 
 // Chargement des albums depuis l'API
