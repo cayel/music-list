@@ -105,12 +105,36 @@
                         <h2>Listes classées</h2>
                         <p class="section-subtitle">Organisez vos albums par humeur, genre ou projet.</p>
                     </div>
-                    <form id="createListForm" class="inline-form">
-                        <input type="text" id="listName" placeholder="Nom de la liste" required>
-                        <input type="text" id="listDescription" placeholder="Description (optionnel)">
-                        <button type="submit" class="btn btn-primary create-list-btn" aria-label="Créer une nouvelle liste">➕ Créer la liste</button>
-                    </form>
-                    <div id="listsContainer" class="lists-container"></div>
+                    <div class="list-create-block" aria-labelledby="create-lists-heading">
+                        <div class="create-manual" role="group" aria-labelledby="create-manual-heading">
+                            <h3 id="create-lists-heading" class="lists-subheading">Créer une nouvelle liste (manuelle)</h3>
+                            <p class="mini-explain">Saisissez un nom, puis ajoutez des albums depuis la fiche d'une liste.</p>
+                            <form id="createListForm" class="inline-form">
+                                <input type="text" id="listName" placeholder="Nom de la liste" aria-label="Nom de la nouvelle liste" required>
+                                <input type="text" id="listDescription" placeholder="Description (optionnel)" aria-label="Description de la nouvelle liste">
+                                <button type="submit" class="btn btn-primary create-list-btn" aria-label="Créer une nouvelle liste">➕ Créer</button>
+                            </form>
+                        </div>
+                        <div class="create-auto" role="group" aria-labelledby="create-auto-heading">
+                            <h3 id="create-auto-heading" class="lists-subheading auto">Génération automatique</h3>
+                            <p id="auto-gen-help" class="mini-explain">Crée une liste classée <em>Album Studio &lt;Artiste&gt;</em> à partir des albums déjà dans votre base. Les compilations, live, remix, best of sont exclus. L'ordre est chronologique.</p>
+                            <form id="generateStudioForm" class="inline-form studio-gen-form" aria-describedby="auto-gen-help">
+                                <input type="text" id="studioArtist" placeholder="Nom exact ou partiel de l'artiste local" aria-label="Nom du groupe ou artiste (doit exister dans les albums locaux)" required>
+                                <button type="submit" class="btn btn-ghost" aria-label="Générer la liste des albums studio">🎯 Générer</button>
+                                <span id="generateStudioStatus" class="generate-status" aria-live="polite"></span>
+                            </form>
+                            <details class="auto-tips"><summary>Aide & critères</summary>
+                                <ul class="auto-criteria">
+                                    <li>Source: seulement vos albums déjà ajoutés</li>
+                                    <li>Filtre exclusion: mots-clés (live, remix, compilation, best of, anthology...)</li>
+                                    <li>Tri: année croissante, puis titre</li>
+                                    <li>Tag appliqué: <code>albums studio</code></li>
+                                </ul>
+                            </details>
+                        </div>
+                    </div>
+                    <h3 class="lists-subheading lists-subheading--divider" id="lists-existing-heading">Mes listes</h3>
+                    <div id="listsContainer" class="lists-container" aria-labelledby="lists-existing-heading"></div>
                     <div id="listDetails" class="list-details" style="display:none"></div>
                 </section>
                 <section class="stats-page" id="statsSection" style="display:none;">

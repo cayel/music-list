@@ -634,6 +634,22 @@ footer.site-footer a:hover { text-decoration:underline; }
 .copy-release-btn { background:var(--bg-alt); color:var(--text); border:1px solid var(--border); padding:8px 14px; border-radius:6px; font-size:.75rem; font-weight:600; cursor:pointer; transition:var(--transition); }
 .copy-release-btn:hover { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
 .copy-release-btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+/* Panneau création listes */
+.list-create-block { background:var(--bg-elev); border:1px solid var(--border); padding:20px 22px 18px; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); margin-bottom:26px; display:flex; flex-direction:column; gap:14px; }
+.lists-subheading { margin:0; font-size:.9rem; text-transform:uppercase; letter-spacing:.18em; color:var(--text-soft); font-weight:700; }
+.lists-subheading--divider { position:relative; padding-top:8px; margin-top:4px; }
+.lists-subheading--divider::before { content:""; position:absolute; top:0; left:0; width:100%; height:1px; background:linear-gradient(90deg,var(--border-strong),transparent); }
+.studio-gen-form { margin-top:-6px; }
+.small-hint { font-size:.65rem; letter-spacing:.05em; color:var(--text-dim); margin:0 2px; }
+.create-manual, .create-auto { position:relative; display:flex; flex-direction:column; gap:10px; }
+.create-auto { margin-top:18px; padding-top:18px; }
+.create-auto::before { content:""; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,var(--border),transparent); opacity:.7; }
+.lists-subheading.auto { color:var(--accent-accent); }
+.mini-explain { margin:0; font-size:.7rem; line-height:1.4; color:var(--text-soft); }
+.auto-tips { margin-top:4px; font-size:.65rem; }
+.auto-tips summary { cursor:pointer; font-weight:600; letter-spacing:.05em; }
+.auto-criteria { margin:6px 0 0 14px; padding:0; list-style:disc; display:flex; flex-direction:column; gap:2px; }
+.auto-criteria li { margin:0; }
 /* ===== Vue compacte des listes ===== */
 .lists-table-wrapper { overflow:auto; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--bg-elev); box-shadow:var(--shadow-sm); }
 .lists-table { width:100%; border-collapse:collapse; font-size:.85rem; }
