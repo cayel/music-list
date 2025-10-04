@@ -1720,17 +1720,18 @@ function drawYearChart(yearDist) {
   ctx.textAlign = 'center';
 
     // Palette (accessible – contraste) recyclée si nombre de décennies > longueur
+    // Palette bleue élargie (variations plus contrastées : clair → cyan → azur → royal → profond → indigo bleuté)
     const decadePalette = [
-        '#1d4ed8', // 0
-        '#0d9488', // 1
-        '#059669', // 2
-        '#65a30d', // 3
-        '#d97706', // 4
-        '#dc2626', // 5
-        '#c026d3', // 6
-        '#7e22ce', // 7
-        '#6d28d9', // 8
-        '#334155'  // 9
+        '#E3F4FF', // 0 - presque blanc bleuté
+        '#BEE7FF', // 1 - pastel clair
+        '#8FD5FF', // 2 - cyan doux
+        '#55BDFD', // 3 - azur moyen
+        '#1F9FF5', // 4 - bleu soutenu
+        '#007FD8', // 5 - bleu primaire fort
+        '#0063B4', // 6 - bleu profond
+        '#004D92', // 7 - bleu nuit
+        '#1F3F75', // 8 - marine
+        '#293562'  // 9 - indigo bleuté sombre
     ];
     const decadeMap = new Map(); // decade -> color
     function decadeOf(y){ return Math.floor(y/10)*10; }
@@ -1744,7 +1745,9 @@ function drawYearChart(yearDist) {
         }
     });
 
-  last.forEach((entry, i) => {
+    // Reset zones interactives
+    canvas._bars = [];
+    last.forEach((entry, i) => {
     const [year, count] = entry;
     const x = padding.l + i * (barW + barGap);
     const barH = max ? (count / max) * plotH : 0;
@@ -1752,9 +1755,18 @@ function drawYearChart(yearDist) {
         const decade = Math.floor(year/10)*10;
         const color = decadeMap.get(decade) || '#3b82f6';
         ctx.fillStyle = color;
-    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, barW, barH, 3) : ctx.rect(x,y,barW,barH); ctx.fill();
-        if (!canvas._bars) canvas._bars = [];
-        canvas._bars.push({ year, x, y, w:barW, h:barH });
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, barW, barH, 3) : ctx.rect(x,y,barW,barH); ctx.fill();
+                canvas._bars.push({ year, x, y, w:barW, h:barH, color });
+                if (canvas._hoverYear === year) {
+                        ctx.save();
+                        ctx.lineWidth = 2;
+                        const border = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#111';
+                        ctx.strokeStyle = border.trim();
+                        ctx.shadowColor = color;
+                        ctx.shadowBlur = 12;
+                        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, barW, barH, 3) : ctx.rect(x,y,barW,barH); ctx.stroke();
+                        ctx.restore();
+                }
     if (last.length <= 16 || i % 2 === 0) {
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim') || '#555';
       ctx.save();
@@ -1788,6 +1800,28 @@ function drawYearChart(yearDist) {
                 if (hit) showYearResults(hit.year);
             });
             canvas._clickBound = true;
+        }
+        if (!canvas._hoverBound) {
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const cx = e.clientX - rect.left;
+                const cy = e.clientY - rect.top;
+                const hit = (canvas._bars||[]).find(b => cx>=b.x && cx<=b.x+b.w && cy>=b.y && cy<=b.y+b.h);
+                const newYear = hit ? hit.year : null;
+                if (newYear !== canvas._hoverYear) {
+                    canvas._hoverYear = newYear;
+                    drawYearChart(yearDist);
+                    canvas.style.cursor = hit ? 'pointer' : 'default';
+                }
+            });
+            canvas.addEventListener('mouseleave', () => {
+                if (canvas._hoverYear != null) {
+                    canvas._hoverYear = null;
+                    drawYearChart(yearDist);
+                }
+                canvas.style.cursor = 'default';
+            });
+            canvas._hoverBound = true;
         }
 }
 
