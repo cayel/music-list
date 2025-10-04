@@ -133,6 +133,16 @@
                         <h2>Statistiques</h2>
                         <p class="section-subtitle">Vue d'ensemble de votre collection et des listes.</p>
                     </div>
+                    <div class="stats-widgets" id="statsWidgets">
+                        <div class="stat-widget">
+                            <div class="stat-number" id="statTotalAlbums">0</div>
+                            <div class="stat-label">Albums</div>
+                        </div>
+                        <div class="stat-widget">
+                            <div class="stat-number" id="statTotalLists">0</div>
+                            <div class="stat-label">Listes</div>
+                        </div>
+                    </div>
                     <div class="stats-charts" id="statsCharts">
                         <div class="chart-card">
                             <h3>Évolution par année</h3>
@@ -143,6 +153,11 @@
                             <h3>Genres / Styles (Top 12)</h3>
                             <canvas id="genreChart" width="900" height="220" aria-label="Diagramme des genres les plus fréquents" role="img"></canvas>
                             <div class="chart-legend" id="genreChartLegend"></div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Artistes (Top 12)</h3>
+                            <canvas id="artistChart" width="900" height="220" aria-label="Artistes avec le plus d'albums" role="img"></canvas>
+                            <div class="chart-legend" id="artistChartLegend"></div>
                         </div>
                     </div>
                 </section>

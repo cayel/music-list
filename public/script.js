@@ -82,6 +82,9 @@ const importStatusBox = document.getElementById('importStatus');
 const statsSection = document.getElementById('statsSection');
 const statsBoardsEl = document.getElementById('statsBoards');
 const statsDetailsEl = document.getElementById('statsDetails');
+// Widgets stats
+const statTotalAlbumsEl = document.getElementById('statTotalAlbums');
+const statTotalListsEl = document.getElementById('statTotalLists');
 // Le script est chargé avant le markup du modal dans index.html, on résout paresseusement
 let albumModal = null;
 let albumModalBody = null;
@@ -1590,7 +1593,7 @@ function computeAlbumStats(albumsArr) {
         genres.forEach(g => genreCounts.set(g, (genreCounts.get(g)||0)+1));
     }
     const yearDistribution = Array.from(byYear.entries()).sort((a,b)=>a[0]-b[0]);
-    const topArtists = Array.from(artistCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,25);
+    const topArtists = Array.from(artistCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12);
     const topGenres = Array.from(genreCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,50);
     return { total, yearDistribution, topArtists, genreCounts: topGenres };
 }
@@ -1669,8 +1672,15 @@ function buildTagUsageSection(tagUsage) {
 function renderStatsPage() {
   console.debug('[Stats] render charts only', { albums: albums.length, lists: lists.length });
   const albumStats = computeAlbumStats(albums);
-  drawYearChart(albumStats.yearDistribution);
-  drawGenreChart(albumStats.genreCounts);
+    updateStatWidgets();
+    drawYearChart(albumStats.yearDistribution);
+    drawGenreChart(albumStats.genreCounts);
+    drawArtistChart(albumStats.topArtists);
+}
+
+function updateStatWidgets() {
+    if (statTotalAlbumsEl) statTotalAlbumsEl.textContent = albums.length;
+    if (statTotalListsEl) statTotalListsEl.textContent = lists.length;
 }
 
 function drawYearChart(yearDist) {
@@ -1708,17 +1718,40 @@ function drawYearChart(yearDist) {
   ctx.textBaseline = 'middle';
   ctx.fillText(String(max), padding.l - 4, padding.t + 4);
   ctx.textAlign = 'center';
+
+    // Palette (accessible – contraste) recyclée si nombre de décennies > longueur
+    const decadePalette = [
+        '#1d4ed8', // 0
+        '#0d9488', // 1
+        '#059669', // 2
+        '#65a30d', // 3
+        '#d97706', // 4
+        '#dc2626', // 5
+        '#c026d3', // 6
+        '#7e22ce', // 7
+        '#6d28d9', // 8
+        '#334155'  // 9
+    ];
+    const decadeMap = new Map(); // decade -> color
+    function decadeOf(y){ return Math.floor(y/10)*10; }
+    // Construire mapping sur l'ensemble des années affichées
+    let paletteIndex = 0;
+    last.forEach(([year]) => {
+        const dec = decadeOf(year);
+        if (!decadeMap.has(dec)) {
+            decadeMap.set(dec, decadePalette[paletteIndex % decadePalette.length]);
+            paletteIndex++;
+        }
+    });
+
   last.forEach((entry, i) => {
     const [year, count] = entry;
     const x = padding.l + i * (barW + barGap);
     const barH = max ? (count / max) * plotH : 0;
     const y = padding.t + (plotH - barH);
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
-    const accentFade = getComputedStyle(document.documentElement).getPropertyValue('--accent-fade').trim() || '#9ab';
-    const grd = ctx.createLinearGradient(0, y, 0, y + barH);
-    grd.addColorStop(0, accent);
-    grd.addColorStop(1, accentFade);
-    ctx.fillStyle = grd;
+        const decade = Math.floor(year/10)*10;
+        const color = decadeMap.get(decade) || '#3b82f6';
+        ctx.fillStyle = color;
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, barW, barH, 3) : ctx.rect(x,y,barW,barH); ctx.fill();
     if (last.length <= 16 || i % 2 === 0) {
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim') || '#555';
@@ -1732,6 +1765,17 @@ function drawYearChart(yearDist) {
   // Axis line
   ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border') || '#ccc';
   ctx.beginPath(); ctx.moveTo(padding.l, h - padding.b); ctx.lineTo(w - padding.r, h - padding.b); ctx.stroke();
+
+    // Légende décennies
+    const legendEl = document.getElementById('yearChartLegend');
+    if (legendEl) {
+        const decades = Array.from(decadeMap.keys()).sort((a,b)=>a-b);
+        legendEl.innerHTML = decades.map(dec => {
+            const label = `${dec}s`;
+            const col = decadeMap.get(dec);
+            return `<span class="legend-item"><span class="legend-swatch" style="background:${col}"></span>${label}</span>`;
+        }).join('');
+    }
 }
 
 function drawGenreChart(genreCounts) {
@@ -1760,8 +1804,7 @@ function drawGenreChart(genreCounts) {
     }
   const padding = { l: 140, r: 10, t: 10, b: 10 };
   const rowH = (h - padding.t - padding.b) / top.length;
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
-  const accentFade = getComputedStyle(document.documentElement).getPropertyValue('--accent-fade').trim() || '#9ab';
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
   ctx.font = '11px system-ui';
   ctx.textBaseline = 'middle';
   top.forEach((entry,i) => {
@@ -1775,10 +1818,7 @@ function drawGenreChart(genreCounts) {
     const x = padding.l;
     const y = yMid - (rowH*0.45)/2;
     const barH = rowH*0.45;
-    const grd = ctx.createLinearGradient(x, y, x + bw, y);
-    grd.addColorStop(0, accent);
-    grd.addColorStop(1, accentFade);
-    ctx.fillStyle = grd;
+    ctx.fillStyle = accent;
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, bw, barH, 4) : ctx.rect(x,y,bw,barH); ctx.fill();
     ctx.strokeStyle = accent;
     ctx.lineWidth = 0.5;
@@ -1787,6 +1827,48 @@ function drawGenreChart(genreCounts) {
     ctx.textAlign = 'left';
     ctx.fillText(String(val), x + bw + 6, yMid);
   });
+}
+function drawArtistChart(artistCounts) {
+    const canvas = document.getElementById('artistChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+    if (!artistCounts || !artistCounts.length) {
+            ctx.font='14px system-ui';
+            ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text-dim')||'#666';
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText('Aucune donnée artistes', w/2, h/2);
+            return;
+    }
+    const top = artistCounts.slice(0,12);
+    const max = Math.max(...top.map(r=>r[1]));
+    if (!max) { ctx.font='14px system-ui'; ctx.fillStyle='#666'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('Données artistes vides', w/2, h/2); return; }
+    const padding = { l: 180, r: 10, t: 10, b: 10 };
+    const rowH = (h - padding.t - padding.b) / top.length;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
+    ctx.font = '11px system-ui';
+    ctx.textBaseline = 'middle';
+    top.forEach((entry,i) => {
+        const [name,val] = entry;
+        const yMid = padding.t + i * rowH + rowH/2;
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#222';
+        ctx.textAlign = 'right';
+        const label = name.length > 28 ? name.slice(0,25)+'…' : name;
+        ctx.fillText(label, padding.l - 8, yMid);
+        const barMaxW = w - padding.l - padding.r - 40;
+        const bw = max ? (val/max)*barMaxW : 0;
+        const x = padding.l;
+        const y = yMid - (rowH*0.45)/2;
+        const barH = rowH*0.45;
+        ctx.fillStyle = accent;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, bw, barH, 4) : ctx.rect(x,y,bw,barH); ctx.fill();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 0.5; ctx.stroke();
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim') || '#555';
+        ctx.textAlign = 'left';
+        ctx.fillText(String(val), x + bw + 6, yMid);
+    });
 }
 function validateAlbumsSchema(arr) {
   if (!Array.isArray(arr)) return 'La réponse albums n\'est pas un tableau';
