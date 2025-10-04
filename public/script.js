@@ -45,7 +45,6 @@ const systemStatusContent = document.getElementById('systemStatusContent');
 const albumsContainer = document.getElementById('albumsContainer');
 const emptyState = document.getElementById('emptyState');
 const albumSearchInput = document.getElementById('albumSearch');
-const clearAlbumSearchBtn = document.getElementById('clearAlbumSearch');
 const yearFilterInput = document.getElementById('yearFilter');
 const clearYearFilterBtn = document.getElementById('clearYearFilter');
 const statAlbumsValue = document.getElementById('statAlbums');
@@ -120,7 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initTheme();
     if (albumSearchInput) albumSearchInput.addEventListener('input', handleAlbumFilterInput);
-    if (clearAlbumSearchBtn) clearAlbumSearchBtn.addEventListener('click', resetAlbumFilter);
     if (yearFilterInput) yearFilterInput.addEventListener('input', handleYearFilterChange);
     if (clearYearFilterBtn) clearYearFilterBtn.addEventListener('click', resetYearFilter);
     if (exportJsonBtn) exportJsonBtn.addEventListener('click', handleExportJson);

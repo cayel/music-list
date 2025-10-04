@@ -73,12 +73,28 @@ header.app-header { margin-bottom:34px; }
 .section-heading { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:24px; }
 .section-heading h2 { margin:0; font-size:1.6rem; color:var(--text); }
 .section-subtitle { margin:0; font-size:.95rem; color:var(--text-soft); }
-.album-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.album-toolbar input { flex:1 1 220px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-alt); color:var(--text); box-shadow:var(--shadow-sm); transition:var(--transition); }
-.album-toolbar input:focus { outline:none; border-color:var(--accent); box-shadow:var(--focus-ring); }
-.album-toolbar .year-filter { display:flex; align-items:center; gap:6px; background:var(--bg-alt); padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); }
-.album-toolbar .year-filter input { width:90px; padding:6px 8px; font-size:.8rem; box-shadow:none; border:1px solid var(--border); background:transparent; }
-.album-toolbar .year-filter input:focus { border-color:var(--accent); box-shadow:none; outline:none; }
+.album-toolbar { --ht:44px; display:flex; align-items:center; gap:10px; flex-wrap:nowrap; padding:4px 6px 0; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
+.album-toolbar input[type="search"] { flex:1 1 360px; min-width:260px; height:var(--ht); padding:0 16px 0 42px; border:1px solid var(--border); border-radius:999px; background:var(--bg-alt); color:var(--text); box-shadow:var(--shadow-sm); font-size:.95rem; position:relative; transition:var(--transition); }
+.album-toolbar input[type="search"]:focus { outline:none; border-color:var(--accent); box-shadow:var(--focus-ring); }
+.album-toolbar input[type="search"]::placeholder { color:var(--text-soft); font-weight:400; letter-spacing:.2px; }
+.album-toolbar .year-filter { display:flex; align-items:center; gap:4px; background:transparent; padding:0; border:none; box-shadow:none; flex:0 0 auto; }
+.album-toolbar .year-filter input { width:82px; height:var(--ht); padding:0 10px; font-size:.8rem; border:1px solid var(--border); background:var(--bg-alt); border-radius:999px; transition:var(--transition); }
+.album-toolbar .year-filter input:focus { border-color:var(--accent); outline:none; box-shadow:var(--focus-ring); }
+.album-toolbar #clearYearFilter { height:var(--ht); padding:0 14px; border-radius:999px; }
+/* Icône loupe pseudo-élément */
+.album-toolbar { position:relative; }
+.album-toolbar:before { content:""; position:absolute; left:20px; top:19px; width:16px; height:16px; background:currentColor; mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" stroke="none" fill="%23aaa" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 5L20.49 19l-5-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>') center/contain no-repeat; opacity:.55; pointer-events:none; }
+@media (max-width:640px){
+  /* On conserve tout sur une seule ligne avec scroll horizontal éventuel */
+  .album-toolbar { padding-bottom:4px; }
+  .album-toolbar:before { top:19px; }
+}
+
+/* Style scrollbar discret (Webkit) */
+.album-toolbar::-webkit-scrollbar { height:6px; }
+.album-toolbar::-webkit-scrollbar-track { background:transparent; }
+.album-toolbar::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.album-toolbar::-webkit-scrollbar-thumb:hover { background:var(--border-strong); }
 .btn-ghost.small { padding:6px 10px; font-size:.7rem; }
 .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--text-soft); padding:10px 18px; border-radius:var(--radius); font-weight:600; cursor:pointer; transition:var(--transition); }
 .btn-ghost:hover { color:var(--text); border-color:var(--accent); }
@@ -354,9 +370,9 @@ header.app-header { margin-bottom:34px; }
     color: var(--text);
 }
 
-.albums-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:18px; }
+.albums-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:12px; }
 
-.album-tile { position:relative; aspect-ratio:1; border-radius:var(--radius-lg); overflow:hidden; background:var(--bg-alt); border:1px solid var(--border); box-shadow:var(--shadow-sm); transition:transform .25s ease, box-shadow .25s ease; isolation:isolate; }
+.album-tile { position:relative; aspect-ratio:1; border-radius:0; overflow:hidden; background:var(--bg-alt); border:1px solid var(--border); box-shadow:var(--shadow-sm); transition:transform .25s ease, box-shadow .25s ease; isolation:isolate; }
 .album-tile:focus-visible { outline:none; box-shadow:0 0 0 3px rgba(58,110,165,.55),0 4px 14px -4px rgba(0,0,0,.4); transform:translateY(-4px); }
 .album-tile:hover,
 .album-tile:focus-within,
@@ -426,7 +442,24 @@ header.app-header { margin-bottom:34px; }
 }
 
 /* Skeleton Loading */
-.skeleton-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:18px; }
+.skeleton-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; }
+
+/* Responsive: réduire progressivement le nombre de colonnes si la largeur dispo devient trop faible */
+@media (max-width: 1400px) {
+  .albums-grid, .skeleton-grid { grid-template-columns:repeat(5,1fr); }
+}
+@media (max-width: 1180px) {
+  .albums-grid, .skeleton-grid { grid-template-columns:repeat(4,1fr); }
+}
+@media (max-width: 920px) {
+  .albums-grid, .skeleton-grid { grid-template-columns:repeat(3,1fr); }
+}
+@media (max-width: 660px) {
+  .albums-grid, .skeleton-grid { grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width: 400px) {
+  .albums-grid, .skeleton-grid { grid-template-columns:repeat(1,1fr); }
+}
 .skeleton-tile { position:relative; aspect-ratio:1; border-radius:var(--radius-lg); background:var(--bg-alt); border:1px solid var(--border); overflow:hidden; }
 .skeleton-shimmer { position:absolute; inset:0; background:linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.45) 40%, rgba(255,255,255,0) 80%); animation:shimmer 1.4s infinite; opacity:.6; }
 [data-theme="dark"] .skeleton-shimmer { background:linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.12) 40%, rgba(255,255,255,0) 80%); }
