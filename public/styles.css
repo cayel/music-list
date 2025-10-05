@@ -389,6 +389,15 @@ header.app-header { margin-bottom:34px; }
 .tile-overlay--minimal .tile-info { margin-bottom:0; }
 .tile-overlay--minimal .tile-title { font-size:1rem; line-height:1.1; }
 .tile-overlay--minimal .tile-artist { font-size:.7rem; opacity:.9; letter-spacing:.04em; text-transform:uppercase; }
+.tile-footer-links { margin-top:8px; display:flex; }
+.apple-link { background:rgba(255,255,255,.18); color:#fff; font-size:.6rem; letter-spacing:.08em; padding:6px 10px; border-radius:999px; text-decoration:none; font-weight:600; backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,.25); transition:.25s; }
+.apple-link:hover { background:rgba(255,255,255,.32); }
+[data-theme="light"] .apple-link { background:rgba(0,0,0,.55); border-color:rgba(0,0,0,.4); }
+[data-theme="light"] .apple-link:hover { background:rgba(0,0,0,.75); }
+.album-modal-actions .apple-link { font-size:.75rem; padding:8px 16px; }
+.mini-apple { position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,.55); color:#fff; font-size:.55rem; padding:4px 6px 5px; line-height:1; border-radius:6px; text-decoration:none; font-weight:600; letter-spacing:.05em; opacity:0; transform:translateY(4px); transition:.25s; }
+.gr-tile:hover .mini-apple, .yr-tile:hover .mini-apple { opacity:1; transform:translateY(0); }
+.gr-tile, .yr-tile { position:relative; }
 .album-tile:hover .tile-overlay,
 .album-tile:focus-within .tile-overlay,
 .album-tile.show-overlay .tile-overlay { opacity:1; pointer-events:auto; }
@@ -407,22 +416,6 @@ header.app-header { margin-bottom:34px; }
 .tile-usage { padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.24); font-size:.7rem; font-weight:600; letter-spacing:.04em; }
 .tile-usage--empty { background:rgba(255,255,255,.15); }
 
-.tile-actions { position:absolute; top:12px; right:12px; display:flex; gap:8px; z-index:3; opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; }
-.album-tile:hover .tile-actions,
-.album-tile:focus-within .tile-actions,
-.album-tile.show-overlay .tile-actions { opacity:1; pointer-events:auto; }
-
-.refresh-btn, .delete-btn { width:34px; height:34px; border-radius:18px; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; transition:transform .2s ease, background .2s ease, box-shadow .2s ease; box-shadow:0 6px 16px rgba(0,0,0,.18); color:#fff; }
-.refresh-btn { background:rgba(58,110,165,.88); }
-.refresh-btn:hover,
-.refresh-btn:focus-visible { background:rgba(47,91,137,.95); outline:none; transform:translateY(-2px); }
-.refresh-btn:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
-.delete-btn { background:rgba(194,59,65,.9); }
-.delete-btn:hover,
-.delete-btn:focus-visible { background:rgba(165,47,52,.95); outline:none; transform:translateY(-2px); }
-.album-tile.in-use .delete-btn { background:rgba(120,120,120,.65); cursor:not-allowed; box-shadow:none; }
-.album-tile.in-use .delete-btn:hover,
-.album-tile.in-use .delete-btn:focus-visible { transform:none; background:rgba(120,120,120,.65); }
 
 [data-theme="dark"] .album-tile { border-color:rgba(60,90,114,.55); box-shadow:none; }
 [data-theme="dark"] .album-tile:hover,
@@ -432,8 +425,6 @@ header.app-header { margin-bottom:34px; }
 [data-theme="dark"] .tile-release { background:rgba(90,149,201,.28); color:#dce9f7; }
 [data-theme="dark"] .tile-usage { background:rgba(90,149,201,.35); }
 [data-theme="dark"] .tile-usage--empty { background:rgba(90,149,201,.22); }
-[data-theme="dark"] .refresh-btn,
-[data-theme="dark"] .delete-btn { box-shadow:none; }
 
 .loading {
     text-align: center;
@@ -713,6 +704,21 @@ footer.site-footer a:hover { text-decoration:underline; }
 .album-modal-actions { display:flex; gap:10px; flex-wrap:wrap; }
 .album-modal-actions a { text-decoration:none; background:var(--accent); color:var(--accent-contrast); padding:8px 14px; border-radius:6px; font-size:.8rem; font-weight:600; box-shadow:0 2px 4px rgba(0,0,0,.25); }
 .album-modal-actions a:hover { filter:brightness(1.1); }
+/* Boutons (rafraîchir / supprimer) alignés sur la charte */
+.album-modal-actions .modal-refresh-btn,
+.album-modal-actions .modal-delete-btn { 
+  font:inherit; font-weight:600; letter-spacing:.4px; cursor:pointer; 
+  padding:8px 14px; border-radius:6px; border:1px solid var(--border); 
+  background:var(--bg-alt); color:var(--text-soft); transition:var(--transition); 
+  display:inline-flex; align-items:center; gap:6px; box-shadow:var(--shadow-sm);
+}
+.album-modal-actions .modal-refresh-btn:hover { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); box-shadow:var(--shadow); }
+.album-modal-actions .modal-refresh-btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+.album-modal-actions .modal-delete-btn { background:var(--danger); color:var(--accent-contrast); border-color:var(--danger); }
+.album-modal-actions .modal-delete-btn:hover { background:var(--danger-hover); }
+.album-modal-actions .modal-delete-btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+.album-modal-actions .modal-delete-btn:disabled,
+.album-modal-actions .modal-refresh-btn:disabled { opacity:.55; cursor:not-allowed; box-shadow:none; }
 .album-tracklist { font-size:.75rem; line-height:1.4; max-height:240px; overflow:auto; padding-right:6px; }
 .album-tracklist h4 { margin:0 0 6px; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); }
 .album-tracklist ul { list-style:decimal; padding-left:18px; margin:0; }
@@ -724,9 +730,6 @@ footer.site-footer a:hover { text-decoration:underline; }
 .modal-cover-img { cursor:zoom-in; transition:transform .35s ease, box-shadow .35s ease; border-radius:4px; }
 .modal-cover-img.zoomed { cursor:zoom-out; transform:scale(1.6); box-shadow:0 12px 40px -8px rgba(0,0,0,.6); position:relative; z-index:5; }
 
-.copy-release-btn { background:var(--bg-alt); color:var(--text); border:1px solid var(--border); padding:8px 14px; border-radius:6px; font-size:.75rem; font-weight:600; cursor:pointer; transition:var(--transition); }
-.copy-release-btn:hover { background:var(--accent); color:var(--accent-contrast); border-color:var(--accent); }
-.copy-release-btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }
 /* Panneau création listes */
 .list-create-block { background:var(--bg-elev); border:1px solid var(--border); padding:20px 22px 18px; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); margin-bottom:26px; display:flex; flex-direction:column; gap:14px; }
 .lists-subheading { margin:0; font-size:.9rem; text-transform:uppercase; letter-spacing:.18em; color:var(--text-soft); font-weight:700; }

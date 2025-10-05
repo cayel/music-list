@@ -564,20 +564,16 @@ function renderAlbums() {
     } else {
         albumsContainer.style.display='block';
         albumsContainer.classList.add('albums-list-view');
-        albumsContainer.innerHTML = `<table class="albums-table"><thead><tr><th>#</th><th>Pochette</th><th>Artiste</th><th>Album</th><th>Année</th><th>Label</th><th>ID</th><th></th></tr></thead><tbody>` +
-            pageSlice.map((a,i)=>`<tr data-album-id="${a.id}"><td>${start + i + 1}</td><td>${a.cover_image_url?`<img src="${a.cover_image_url}" alt="${escapeHtml(a.album_title)}" class="tbl-cover">`:'—'}</td><td>${escapeHtml(a.artist_name)}</td><td>${escapeHtml(a.album_title)}</td><td>${a.release_year||'—'}</td><td>${escapeHtml(a.label||'—')}</td><td>${a.release_id?('#'+a.release_id):'—'}</td><td><button class="tbl-open" data-open="1">Ouvrir</button> <button class="tbl-refresh" data-refresh="${a.id}">↻</button> <button class="tbl-delete" data-delete="${a.id}">✕</button></td></tr>`).join('') + '</tbody></table>';
+                albumsContainer.innerHTML = `<table class="albums-table"><thead><tr><th>#</th><th>Pochette</th><th>Artiste</th><th>Album</th><th>Année</th><th>Label</th><th>ID</th><th></th></tr></thead><tbody>` +
+                        pageSlice.map((a,i)=>`<tr data-album-id="${a.id}"><td>${start + i + 1}</td><td>${a.cover_image_url?`<img src="${a.cover_image_url}" alt="${escapeHtml(a.album_title)}" class="tbl-cover">`:'—'}</td><td>${escapeHtml(a.artist_name)}</td><td>${escapeHtml(a.album_title)}</td><td>${a.release_year||'—'}</td><td>${escapeHtml(a.label||'—')}</td><td>${a.release_id?('#'+a.release_id):'—'}</td><td><button class="tbl-open" data-open="1">Ouvrir</button></td></tr>`).join('') + '</tbody></table>';
     }
-  albumsContainer.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', e => { const id = e.currentTarget.getAttribute('data-album-id'); deleteAlbum(id); e.stopPropagation(); }));
-  albumsContainer.querySelectorAll('.refresh-btn').forEach(btn => btn.addEventListener('click', e => { const id = e.currentTarget.getAttribute('data-album-id'); refreshAlbum(id); e.stopPropagation(); }));
+    // (Actions directes supprimées: ouverture seulement)
     if (albumViewMode === 'list') {
-        albumsContainer.querySelectorAll('button.tbl-delete').forEach(btn => btn.addEventListener('click', e => { const id = btn.getAttribute('data-delete'); deleteAlbum(id); e.stopPropagation(); }));
-        albumsContainer.querySelectorAll('button.tbl-refresh').forEach(btn => btn.addEventListener('click', e => { const id = btn.getAttribute('data-refresh'); refreshAlbum(id); e.stopPropagation(); }));
         albumsContainer.querySelectorAll('tr[data-album-id] button.tbl-open').forEach(btn => btn.addEventListener('click', e => { const tr = btn.closest('tr'); const id = parseInt(tr.getAttribute('data-album-id'),10); const album = albums.find(a=>a.id===id); if(album) openAlbumModal(album); e.stopPropagation(); }));
         albumsContainer.querySelectorAll('tr[data-album-id]').forEach(tr => tr.addEventListener('dblclick', e => { const id = parseInt(tr.getAttribute('data-album-id'),10); const album = albums.find(a=>a.id===id); if(album) openAlbumModal(album); }));
     }
   albumsContainer.querySelectorAll('.album-tile').forEach(tile => {
     tile.addEventListener('click', e => {
-      if (e.target.closest('.tile-actions')) return; // ignore action clicks
       const id = parseInt(tile.getAttribute('data-album-id'),10);
       const album = albums.find(a => a.id === id);
       if (album) openAlbumModal(album);
@@ -775,24 +771,18 @@ function createAlbumCard(album) { // modified to add data-album-id
     const safeArtist = escapeHtml(album.artist_name || '(Artiste inconnu)');
     const year = album && album.release_year ? album.release_year : 'Année inconnue';
     const genre = album.genre || ''; const style = album.style || ''; const label = album.label || ''; const country = album.country || '';
-    const usedCount = album.list_usage_count || 0; const cannotDelete = usedCount > 0;
-    const deleteTitle = cannotDelete ? `Album utilisé dans ${usedCount} liste(s)` : 'Supprimer cet album';
+        const usedCount = album.list_usage_count || 0; const cannotDelete = usedCount > 0; // conserve pour info éventuelle future
     const coverImage = album.cover_image_url ? `<img src="${album.cover_image_url}" alt="Pochette de ${safeTitle}" class="album-cover">` : `<div class="album-cover cover-placeholder" role="img">🎵</div>`;
         const tileLabel = `${album.artist_name} – ${album.album_title}${year && year !== 'Année inconnue' ? ` (${year})` : ''}`;
         const appleUrl = buildAppleMusicUrl(album.artist_name, album.album_title);
         return `
-      <article class="album-tile ${cannotDelete ? 'in-use' : ''}" data-album-id="${album.id}" aria-label="${escapeHtml(tileLabel)}">
-        <div class="tile-actions">
-          <button class="refresh-btn" data-album-id="${album.id}" title="Rafraîchir depuis Discogs">⟳</button>
-          <button class="delete-btn" data-album-id="${album.id}" title="${escapeHtml(deleteTitle)}" ${cannotDelete ? 'disabled' : ''}>×</button>
-        </div>
+            <article class="album-tile ${cannotDelete ? 'in-use' : ''}" data-album-id="${album.id}" aria-label="${escapeHtml(tileLabel)}">
         ${coverImage}
         <div class="tile-overlay tile-overlay--minimal">
           <div class="tile-info">
             <p class="tile-artist">${safeArtist}</p>
             <h3 class="tile-title">${safeTitle}</h3>
           </div>
-                    <div class="tile-footer-links"><a href="${appleUrl}" target="_blank" rel="noopener" class="apple-link" title="Écouter sur Apple Music"> Music</a></div>
         </div>
       </article>`;
 }
@@ -813,23 +803,15 @@ function openAlbumModal(album) {
     // close bindings
     albumModal.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', closeAlbumModal));
     document.addEventListener('keydown', escModalHandler, { once:true });
-    const copyBtn = albumModal.querySelector('.copy-release-btn');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-            const rel = copyBtn.getAttribute('data-relid');
-            if (!rel) return;
-            navigator.clipboard.writeText(rel).then(()=> {
-                const prev = copyBtn.textContent; copyBtn.textContent='Copié!';
-                setTimeout(()=> { copyBtn.textContent = prev; }, 1500);
-            }).catch(()=>{});
-        });
-    }
+    // (Bouton copier ID retiré)
     const coverImg = albumModal.querySelector('.modal-cover-img');
     if (coverImg) {
         coverImg.addEventListener('click', () => {
             coverImg.classList.toggle('zoomed');
         });
     }
+    // Lier actions refresh / delete maintenant présentes dans le modal
+    try { bindModalActionButtons(album); } catch(e) { console.error('Bind modal actions', e); }
 }
 
 function closeAlbumModal() {
@@ -870,6 +852,7 @@ function buildAlbumModalContent(a) {
   const safeTitle = escapeHtml(a.album_title); const safeArtist = escapeHtml(a.artist_name);
     const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="Pochette ${safeTitle}" class="modal-cover-img" data-zoomable="1">` : `<div class="cover-placeholder" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:4rem;">🎵</div>`;
   const discogsLink = a.release_id ? `https://www.discogs.com/release/${a.release_id}` : null;
+    const appleUrl = buildAppleMusicUrl(a.artist_name, a.album_title);
   const metaEntries = [
     ['Année', a.release_year || '—'],
     ['Label', a.label || '—'],
@@ -894,11 +877,56 @@ function buildAlbumModalContent(a) {
       <ul class="album-meta-list">${metaHtml}</ul>
             <div class="album-modal-actions">
                 ${discogsLink ? `<a href="${discogsLink}" target="_blank" rel="noopener" title="Ouvrir sur Discogs">Discogs ↗</a>` : ''}
-                ${a.release_id ? `<button type="button" class="copy-release-btn" data-relid="${a.release_id}" title="Copier Release ID">Copier ID</button>` : ''}
-                <a href="${appleUrl}" target="_blank" rel="noopener" title="Écouter sur Apple Music" class="apple-link strong"> Music</a>
+                                <a href="${appleUrl}" target="_blank" rel="noopener" title="Écouter sur Apple Music" class="apple-link strong"> Music</a>
+                                <button type="button" class="modal-refresh-btn" data-album-id="${a.id}" title="Rafraîchir metadata Discogs">↻ Rafraîchir</button>
+                                <button type="button" class="modal-delete-btn" data-album-id="${a.id}" title="Supprimer cet album">🗑 Supprimer</button>
             </div>
       ${tracklistHtml}
     </div>`;
+}
+
+// Ajout fonction de rafraîchissement (si non définie précédemment)
+if (typeof window.refreshAlbum !== 'function') {
+    async function refreshAlbum(albumId) {
+        if (!albumId) return;
+        const id = parseInt(albumId,10);
+        try {
+            showMessage('Rafraîchissement…','info');
+            const res = await fetch(`${API_BASE_URL}/albums/${id}/refresh`, { method:'POST' });
+            const data = await res.json().catch(()=>({}));
+            if (!res.ok) throw new Error(data.error || 'Échec rafraîchissement');
+            showMessage('Album rafraîchi','success');
+            // Recharger liste albums pour refléter changements
+            await loadAlbums();
+            // Si modal ouvert sur cet album, le reconstruire avec données fraîches
+            const updated = albums.find(a=>a.id===id);
+            if (updated && albumModal && albumModal.style.display==='block') {
+                albumModalBody.innerHTML = buildAlbumModalContent(updated);
+                bindModalActionButtons(updated);
+            }
+        } catch(e) {
+            showMessage(e.message,'error');
+        }
+    }
+    window.refreshAlbum = refreshAlbum;
+}
+
+function bindModalActionButtons(album) {
+    if (!albumModal) return;
+    const refreshBtn = albumModal.querySelector('.modal-refresh-btn');
+    const deleteBtn = albumModal.querySelector('.modal-delete-btn');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => refreshAlbum(album.id));
+    if (deleteBtn) deleteBtn.addEventListener('click', async () => {
+        if (!confirm('Supprimer cet album de la collection ?')) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/albums/${album.id}`, { method:'DELETE' });
+            const data = await res.json().catch(()=>({}));
+            if (!res.ok) throw new Error(data.error || 'Erreur suppression');
+            showMessage('Album supprimé','success');
+            closeAlbumModal();
+            loadAlbums();
+        } catch(e) { showMessage(e.message,'error'); }
+    });
 }
 
 // ====================== LISTES ======================
