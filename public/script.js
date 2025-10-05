@@ -458,7 +458,9 @@ async function loadAlbums() {
           showMessage('Schéma inattendu: ' + schemaErr, 'error');
           return;
         }
-        albums = json;
+    albums = json;
+    // Rendre accessible aux handlers globaux écrits avec window.albums
+    try { window.albums = albums; } catch(_) { /* ignore */ }
         console.debug('[Albums] loaded', albums.length);
         renderAlbums();
         updateStats();
@@ -775,8 +777,8 @@ function createAlbumCard(album) { // modified to add data-album-id
     const coverImage = album.cover_image_url ? `<img src="${album.cover_image_url}" alt="Pochette de ${safeTitle}" class="album-cover">` : `<div class="album-cover cover-placeholder" role="img">🎵</div>`;
         const tileLabel = `${album.artist_name} – ${album.album_title}${year && year !== 'Année inconnue' ? ` (${year})` : ''}`;
         const appleUrl = buildAppleMusicUrl(album.artist_name, album.album_title);
-        return `
-            <article class="album-tile ${cannotDelete ? 'in-use' : ''}" data-album-id="${album.id}" aria-label="${escapeHtml(tileLabel)}">
+                return `
+                        <article class="album-tile ${cannotDelete ? 'in-use' : ''}" data-album-id="${album.id}" aria-label="${escapeHtml(tileLabel)}" data-id="${album.id}">
         ${coverImage}
         <div class="tile-overlay tile-overlay--minimal">
           <div class="tile-info">
@@ -1229,12 +1231,42 @@ function renderListDetails(list) {
             </div>` : `
             <div class="albums-grid list-albums-grid" data-mode="mosaic">
                 ${list.items.map(it => {
-                    // On adapte la structure attendue par createAlbumCard
-                    const fakeAlbum = { id: it.album_id, album_title: it.album_title, artist_name: it.artist_name, release_year: it.release_year, cover_image_url: it.cover_image_url, list_usage_count: 1 };
-                    return `<div class="list-album-wrapper" data-li-id="${it.list_item_id}">${createAlbumCard(fakeAlbum)}${listEditMode ? `<button class='remove-list-item overlay-remove' data-li-id='${it.list_item_id}' title='Retirer de la liste'>×</button>`:''}</div>`;
+                    const albumId = it.id;
+                    const fakeAlbum = { id: albumId, album_title: it.album_title, artist_name: it.artist_name, release_year: it.release_year, cover_image_url: it.cover_image_url, list_usage_count: 1 };
+                    return `<div class=\"list-album-wrapper\" data-li-id=\"${it.list_item_id}\" data-album-id=\"${albumId}\">${createAlbumCard(fakeAlbum)}${listEditMode ? `<button class='remove-list-item overlay-remove' data-li-id='${it.list_item_id}' title='Retirer de la liste'>×</button>`:''}</div>`;
                 }).join('')}
             </div>`}
     `;
+    // Binding unique pour ouverture modal en mode mosaïque
+    if (listViewMode === 'mosaic') {
+        const mosaicTiles = listDetails.querySelectorAll('.list-albums-grid .album-tile');
+        mosaicTiles.forEach(tile => {
+            tile.setAttribute('tabindex','0');
+            tile.setAttribute('role','button');
+            const openFromTile = (e) => {
+                if (e && e.type === 'click' && e.target.closest('.overlay-remove')) return;
+                const id = parseInt(tile.getAttribute('data-album-id'),10) || parseInt(tile.closest('.list-album-wrapper')?.getAttribute('data-album-id'),10);
+                if (!Number.isInteger(id)) return;
+                let album = albums.find(a=>a.id===id);
+                if (!album) {
+                    album = {
+                        id,
+                        album_title: tile.querySelector('.tile-title')?.textContent?.trim() || 'Album',
+                        artist_name: tile.querySelector('.tile-artist')?.textContent?.trim() || 'Artiste',
+                        release_year: null,
+                        label: null,
+                        country: null,
+                        genre: null,
+                        style: null,
+                        cover_image_url: tile.querySelector('img')?.src || null
+                    };
+                }
+                openAlbumModal(album);
+            };
+            tile.addEventListener('click', openFromTile);
+            tile.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFromTile(e); } });
+        });
+    }
     // Bind add form
     const addForm = listDetails.querySelector('.add-to-list-form');
     addForm.addEventListener('submit', handleAddItemToList);
@@ -1256,6 +1288,8 @@ function renderListDetails(list) {
             });
         });
     }
+
+    // plus de bindListMosaicOpen: binding direct ci-dessus suffit
 
     // Gestion sauvegarde nom / description
     if (listEditMode) {
@@ -1387,6 +1421,7 @@ function renderListDetails(list) {
         });
     });
 
+
     // Activer le drag & drop seulement si mode édition
     if (listEditMode && listViewMode === 'list') {
         enableListReordering(list.id);
@@ -1436,6 +1471,9 @@ function renderListDetails(list) {
         }
     }
 }
+
+// Assure l'ouverture du modal pour les tuiles d'album dans la mosaïque des listes
+// bindListMosaicOpen supprimé (rationalisation)
 
 // ================== REORDER LIST (DRAG & DROP) ==================
 function enableListReordering(listId) {
@@ -2099,3 +2137,6 @@ if (!window.__albumDelegationInstalled) {
         });
     });
 }
+
+// Délégation globale pour les mosaïques de listes (list-album-wrapper)
+// Délégation globale supprimée (rationalisation mosaïque)
