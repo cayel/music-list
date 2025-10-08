@@ -64,7 +64,7 @@
 
                 <section class="collection" id="albumsSection">
                     <div class="section-heading">
-                        <h2>Les albums <span id="legacyBadgeGlobal" class="legacy-badge-global" style="display:none; font-size:.8rem; font-weight:500; background:var(--warn-bg,#b86); color:var(--warn-fg,#fff); padding:2px 6px; border-radius:4px; vertical-align:middle;">legacy</span></h2>
+                        <h2>Les albums</h2>
                         <div class="album-toolbar">
                             <button type="button" id="albumViewToggle" class="btn-ghost" aria-label="Basculer vue" title="Basculer vue mosaïque / liste">🗃️</button>
                             <label for="albumSearch" class="sr-only">Filtrer les albums</label>
@@ -214,10 +214,8 @@
                             <option value="500">500</option>
                         </select>
                         <button id="systemStatusBtn" class="btn-ghost">Santé système</button>
-                        <button id="migrateMastersDryBtn" class="btn-ghost" title="Simulation migration releases -> masters">Dry‑run Masters</button>
-                        <button id="migrateMastersBtn" class="btn btn-primary" title="Migrer les albums legacy (release -> master)">Migrer Masters</button>
                     </div>
-                    <div id="migrationStatus" class="migration-status" style="display:none; margin-top:.75rem; font-size:.8rem; line-height:1.4; white-space:pre-wrap; background:var(--panel-bg); padding:.6rem .8rem; border:1px solid var(--border-color); border-radius:6px; max-height:260px; overflow:auto;"></div>
+                    
                     <div id="systemStatusPanel" class="system-status card" style="display:none; margin:12px 0;">
                         <div class="card-header compact"><h3>Santé système</h3></div>
                         <div id="systemStatusContent" class="system-status-content">Chargement…</div>
