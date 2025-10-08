@@ -7,7 +7,9 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// Port de base demandé ; runtimePort reflétera le port effectif après tentative (fallback si occupé)
+const BASE_PORT = parseInt(process.env.PORT || '3000', 10) || 3000;
+let runtimePort = BASE_PORT;
 const DISCOGS_API_URL = 'https://api.discogs.com';
 const USER_AGENT = 'MusicListApp/1.0';
 const DISCOGS_TOKEN = process.env.DISCOGS_TOKEN || null;
@@ -70,7 +72,7 @@ app.get('/api/status', (req, res) => {
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         db,
-        port: PORT,
+        port: runtimePort,
         env: { node: nodeEnv, name: envName, isLocal },
         version: { app: version, git }
     });
@@ -84,19 +86,26 @@ function logOperation(action, entityType, entityId, infoObj) {
     dbLayer.run('INSERT INTO operation_logs (action, entity_type, entity_id, info) VALUES (?,?,?,?)', [action, entityType || null, entityId || null, info]);
 }
 
-function mapReleaseData(release) {
-    const artistName = (release.artists && release.artists.length) ? release.artists.map(a => a.name).join(', ') : 'Inconnu';
-    const albumTitle = release.title || 'Sans titre';
-    const year = release.year || null;
-    const genres = release.genres ? release.genres.join(', ') : null;
-    const styles = release.styles ? release.styles.join(', ') : null;
-    const label = (release.labels && release.labels.length) ? release.labels.map(l => l.name).join(', ') : null;
+function mapMasterData(master) {
+    const artistName = (master.artists && master.artists.length) ? master.artists.map(a => a.name).join(', ') : 'Inconnu';
+    const primaryArtistId = (master.artists && master.artists.length) ? master.artists[0].id : null;
+    const albumTitle = master.title || 'Sans titre';
+    const year = master.year || null;
+    const genres = master.genres ? master.genres.join(', ') : null;
+    const styles = master.styles ? master.styles.join(', ') : null;
     let cover = null;
-    if (release.images && release.images.length) {
-        const primary = release.images.find(i => i.type === 'primary') || release.images[0];
-        cover = primary ? primary.uri : null;
+    if (master.images && master.images.length) {
+        const primary = master.images.find(i => i.type === 'primary') || master.images[0];
+        cover = primary ? (primary.uri || primary.resource_url) : null;
     }
-    return { artist_name: artistName, album_title: albumTitle, release_year: year, genre: genres, style: styles, label, cover_image_url: cover };
+    return { artist_id: primaryArtistId, artist_name: artistName, album_title: albumTitle, release_year: year, genre: genres, style: styles, label: null, cover_image_url: cover };
+}
+
+async function fetchDiscogsMaster(masterId) {
+    const headers = { 'User-Agent': USER_AGENT };
+    if (DISCOGS_TOKEN) headers['Authorization'] = `Discogs token=${DISCOGS_TOKEN}`;
+    const r = await axios.get(`${DISCOGS_API_URL}/masters/${masterId}`, { headers });
+    return r.data;
 }
 
 async function fetchDiscogsRelease(releaseId) {
@@ -106,17 +115,46 @@ async function fetchDiscogsRelease(releaseId) {
     return r.data;
 }
 
-function ensureAlbumByRelease(releaseId) {
+function extractUniqueLabelsFromRelease(releaseData) {
+    if (!releaseData || !Array.isArray(releaseData.labels)) return null;
+    const seen = new Set();
+    const out = [];
+    for (const lab of releaseData.labels) {
+        if (!lab || !lab.name) continue;
+        const name = lab.name.trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue; // évite doublons de même nom
+        seen.add(key);
+        // Inclure catno si distinct et pertinent
+        if (lab.catno && lab.catno !== 'none' && lab.catno !== 'N/A') {
+            out.push(`${name} (${lab.catno})`);
+        } else {
+            out.push(name);
+        }
+    }
+    return out.length ? out.join(', ') : null;
+}
+
+function ensureAlbumByMaster(masterId) {
     return new Promise((resolve, reject) => {
-    dbLayer.get('SELECT id FROM albums WHERE release_id = ?', [releaseId], async (err, row) => {
+        dbLayer.get('SELECT id FROM albums WHERE master_id = ?', [masterId], async (err, row) => {
             if (err) return reject(err);
             if (row) return resolve(row.id);
             try {
-                const data = await fetchDiscogsRelease(releaseId);
-                const mapped = mapReleaseData(data);
-                dbLayer.run(`INSERT INTO albums (release_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-                    [releaseId, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url],
+                const data = await fetchDiscogsMaster(masterId);
+                const mapped = mapMasterData(data);
+                // Récupération label depuis la main_release si disponible
+                if (data.main_release) {
+                    try {
+                        const rel = await fetchDiscogsRelease(data.main_release);
+                        const lbl = extractUniqueLabelsFromRelease(rel);
+                        if (lbl) mapped.label = lbl;
+                    } catch (e) { /* ignore label fetch error */ }
+                }
+                dbLayer.run(`INSERT INTO albums (master_id, artist_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, updated_at)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+                    [masterId, mapped.artist_id, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url],
                     function (insErr) { return insErr ? reject(insErr) : resolve(this.lastID); }
                 );
             } catch (e) { reject(e); }
@@ -139,26 +177,34 @@ app.get('/api/albums/search', (req, res) => {
     dbLayer.all(sql, [like, like], (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows));
 });
 
+
 app.post('/api/albums', async (req, res) => {
-    const { releaseId } = req.body || {};
-    if (!releaseId) return res.status(400).json({ error: 'releaseId requis' });
+    const { masterId } = req.body || {};
+    if (!masterId) return res.status(400).json({ error: 'masterId requis' });
     try {
-        const data = await fetchDiscogsRelease(releaseId);
-        const mapped = mapReleaseData(data);
-    dbLayer.run(`INSERT INTO albums (release_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-            [releaseId, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url],
+        const data = await fetchDiscogsMaster(masterId);
+        const mapped = mapMasterData(data);
+        if (data.main_release) {
+            try {
+                const rel = await fetchDiscogsRelease(data.main_release);
+                const lbl = extractUniqueLabelsFromRelease(rel);
+                if (lbl) mapped.label = lbl;
+            } catch { /* ignore */ }
+        }
+        dbLayer.run(`INSERT INTO albums (master_id, artist_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [masterId, mapped.artist_id, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url],
             function (errIns) {
                 if (errIns) {
                     if (errIns.message.includes('UNIQUE')) return res.status(409).json({ error: 'Album déjà présent' });
                     return res.status(500).json({ error: errIns.message });
                 }
-                logOperation('album.add', 'album', this.lastID, { release_id: releaseId });
-                res.json({ message: 'Album ajouté', albumId: this.lastID, albumData: { release_id: releaseId, ...mapped } });
+                logOperation('album.add', 'album', this.lastID, { master_id: masterId, artist_id: mapped.artist_id });
+                res.json({ message: 'Album ajouté', albumId: this.lastID, albumData: { master_id: masterId, artist_id: mapped.artist_id, ...mapped } });
             }
         );
     } catch (e) {
-        if (e.response && e.response.status === 404) return res.status(404).json({ error: 'Release non trouvée' });
+        if (e.response && e.response.status === 404) return res.status(404).json({ error: 'Master non trouvé' });
         res.status(500).json({ error: 'Erreur Discogs' });
     }
 });
@@ -183,15 +229,23 @@ app.patch('/api/albums/:id/refresh', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Album non trouvé' });
         try {
-            const data = await fetchDiscogsRelease(row.release_id);
-            const mapped = mapReleaseData(data);
-            dbLayer.run(`UPDATE albums SET artist_name=?, album_title=?, release_year=?, genre=?, style=?, label=?, cover_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-                [mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url, id],
+            if (!row.master_id) return res.status(400).json({ error: 'master_id absent pour cet album' });
+            const data = await fetchDiscogsMaster(row.master_id);
+            const mapped = mapMasterData(data);
+            if (data.main_release) {
+                try {
+                    const rel = await fetchDiscogsRelease(data.main_release);
+                    const lbl = extractUniqueLabelsFromRelease(rel);
+                    if (lbl) mapped.label = lbl;
+                } catch { /* ignore */ }
+            }
+            dbLayer.run(`UPDATE albums SET artist_id=?, artist_name=?, album_title=?, release_year=?, genre=?, style=?, label=?, cover_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+                [mapped.artist_id, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url, id],
                 function (uErr) {
                     if (uErr) return res.status(500).json({ error: uErr.message });
                     dbLayer.get('SELECT * FROM albums WHERE id = ?', [id], (gErr, updated) => {
                         if (gErr) return res.status(500).json({ error: gErr.message });
-                        logOperation('album.refresh', 'album', id, { release_id: row.release_id });
+                        logOperation('album.refresh', 'album', id, { master_id: row.master_id });
                         res.json({ message: 'Album rafraîchi', album: updated });
                     });
                 }
@@ -319,14 +373,14 @@ app.delete('/api/lists/:id/tags/:tag', (req, res) => {
 });
 
 app.post('/api/lists/:id/items', async (req, res) => {
-    const { id } = req.params; const { albumId, releaseId } = req.body || {};
-    if (!albumId && !releaseId) return res.status(400).json({ error: 'albumId ou releaseId requis' });
+    const { id } = req.params; const { albumId, masterId } = req.body || {};
+    if (!albumId && !masterId) return res.status(400).json({ error: 'albumId ou masterId requis' });
     dbLayer.get('SELECT id FROM lists WHERE id=?', [id], async (lErr, listRow) => {
         if (lErr) return res.status(500).json({ error: lErr.message });
         if (!listRow) return res.status(404).json({ error: 'Liste non trouvée' });
         try {
             let finalAlbumId = albumId;
-            if (!finalAlbumId && releaseId) finalAlbumId = await ensureAlbumByRelease(releaseId);
+            if (!finalAlbumId && masterId) finalAlbumId = await ensureAlbumByMaster(masterId);
             // Pré‑vérification (évite retour 500 Postgres 'duplicate key value')
             dbLayer.get('SELECT id FROM list_items WHERE list_id=? AND album_id=?', [id, finalAlbumId], (dupErr, existing) => {
                 if (dupErr) return res.status(500).json({ error: dupErr.message });
@@ -347,7 +401,7 @@ app.post('/api/lists/:id/items', async (req, res) => {
                 });
             });
         } catch (e) {
-            if (e.response && e.response.status === 404) return res.status(404).json({ error: 'Release non trouvée' });
+            if (e.response && e.response.status === 404) return res.status(404).json({ error: 'Master non trouvé' });
             res.status(500).json({ error: e.message });
         }
     });
@@ -504,7 +558,30 @@ app.post('/api/lists/generate/studio', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => console.log(`Serveur démarré sur http://localhost:${PORT}`));
+// Démarrage avec fallback automatique si le port est déjà utilisé (jusqu'à +10 ports)
+function startServer(port, remainingFallbacks) {
+    const server = app.listen(port, () => {
+        runtimePort = port;
+        console.log(`Serveur démarré sur http://localhost:${port}`);
+    });
+    server.on('error', (err) => {
+        if (err && err.code === 'EADDRINUSE') {
+            if (remainingFallbacks > 0) {
+                const nextPort = port + 1;
+                console.warn(`[Server] Port ${port} occupé, tentative sur ${nextPort}… (${remainingFallbacks} fallback restant)`);
+                startServer(nextPort, remainingFallbacks - 1);
+            } else {
+                console.error('[Server] Ports consécutifs indisponibles, arrêt. Dernière erreur:', err.message);
+                process.exit(1);
+            }
+        } else {
+            console.error('[Server] Erreur au démarrage:', err);
+            process.exit(1);
+        }
+    });
+}
+
+startServer(BASE_PORT, 10);
 
 // ================== ADMIN (Export) ==================
 app.get('/api/admin/export', (req, res) => {
@@ -708,6 +785,97 @@ app.post('/api/admin/import', (req, res) => {
             res.status(500).json({ error: e.message });
         }
     })();
+});
+
+// ================== ADMIN: Migration release->master ==================
+// POST /api/admin/migrate/masters
+// Paramètres optionnels:
+//   ?dry=1 (ne fait que simuler)
+//   ?limit=N (limite le nombre d'albums legacy traités)
+//   ?merge=0 pour ne PAS fusionner avec un album existant (par défaut merge=1)
+app.post('/api/admin/migrate/masters', async (req, res) => {
+    const dryRun = /^(1|true)$/i.test(String(req.query.dry||''));
+    const doMerge = !/^(0|false)$/i.test(String(req.query.merge||''));
+    let limit = parseInt(req.query.limit||'0',10); if (!Number.isFinite(limit) || limit < 0) limit = 0;
+    const summary = {
+        dryRun,
+        merge: doMerge,
+        scanned: 0,
+        migrated: 0,
+        merged_into_existing: 0,
+        skipped_no_master_id: 0,
+        skipped_already_has_master: 0,
+        errors: [],
+        details: []
+    };
+    function logDetail(type, releaseId, data) {
+        summary.details.push({ type, release_id: releaseId, ...data });
+    }
+    function dbAll(sql, params=[]) { return new Promise((resolve,reject)=>dbLayer.all(sql, params, (e,r)=> e?reject(e):resolve(r||[]))); }
+    function dbGet(sql, params=[]) { return new Promise((resolve,reject)=>dbLayer.get(sql, params, (e,r)=> e?reject(e):resolve(r||null))); }
+    function dbRun(sql, params=[]) { return new Promise((resolve,reject)=>dbLayer.run(sql, params, function(e){ return e?reject(e):resolve(this); })); }
+    try {
+        const legacyRows = await dbAll(`SELECT * FROM albums WHERE master_id IS NULL AND release_id IS NOT NULL ORDER BY id ASC`);
+        const targetRows = limit ? legacyRows.slice(0, limit) : legacyRows;
+        for (const row of targetRows) {
+            summary.scanned++;
+            const releaseId = row.release_id;
+            try {
+                const rel = await fetchDiscogsRelease(releaseId);
+                const masterId = rel && rel.master_id ? rel.master_id : null;
+                if (!masterId) { summary.skipped_no_master_id++; logDetail('no_master', releaseId, { album_id: row.id }); continue; }
+                // Déjà migré (course condition) ?
+                const existingWithMaster = await dbGet('SELECT id FROM albums WHERE master_id = ?', [masterId]);
+                if (existingWithMaster && existingWithMaster.id === row.id) { summary.skipped_already_has_master++; continue; }
+                if (existingWithMaster && doMerge) {
+                    if (dryRun) {
+                        summary.merged_into_existing++; logDetail('merge_dry', releaseId, { legacy_album_id: row.id, master_album_id: existingWithMaster.id, master_id: masterId });
+                        continue;
+                    }
+                    // Rewire list_items du legacy vers l'existant
+                    const items = await dbAll('SELECT id, list_id FROM list_items WHERE album_id=?', [row.id]);
+                    for (const it of items) {
+                        const dup = await dbGet('SELECT id FROM list_items WHERE list_id=? AND album_id=?', [it.list_id, existingWithMaster.id]);
+                        if (dup) {
+                            // supprimer l'item legacy (collision)
+                            await dbRun('DELETE FROM list_items WHERE id=?', [it.id]);
+                        } else {
+                            await dbRun('UPDATE list_items SET album_id=? WHERE id=?', [existingWithMaster.id, it.id]);
+                        }
+                    }
+                    // Supprimer l'album legacy (s'il n'a plus d'items)
+                    const stillItems = await dbGet('SELECT 1 FROM list_items WHERE album_id=?', [row.id]);
+                    if (!stillItems) await dbRun('DELETE FROM albums WHERE id=?', [row.id]);
+                    summary.merged_into_existing++; logDetail('merged', releaseId, { legacy_album_id: row.id, master_album_id: existingWithMaster.id, master_id: masterId });
+                    continue;
+                }
+                // Sinon mise à jour in-place de la ligne legacy pour l'enrichir
+                const masterData = await fetchDiscogsMaster(masterId);
+                const mapped = mapMasterData(masterData);
+                if (masterData.main_release) {
+                    try {
+                        const mainRel = await fetchDiscogsRelease(masterData.main_release);
+                        const lbl = extractUniqueLabelsFromRelease(mainRel);
+                        if (lbl) mapped.label = lbl;
+                    } catch { /* ignore */ }
+                }
+                if (dryRun) {
+                    summary.migrated++; logDetail('migrate_dry', releaseId, { album_id: row.id, master_id: masterId });
+                    continue;
+                }
+                await dbRun(`UPDATE albums SET master_id=?, artist_id=?, artist_name=?, album_title=?, release_year=?, genre=?, style=?, label=?, cover_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+                    [masterId, mapped.artist_id, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url, row.id]);
+                summary.migrated++; logDetail('migrated', releaseId, { album_id: row.id, master_id: masterId });
+            } catch (e) {
+                summary.errors.push({ release_id: releaseId, album_id: row.id, error: e.message });
+                logDetail('error', releaseId, { album_id: row.id, error: e.message });
+            }
+        }
+        logOperation('admin.migrate.masters', 'admin', null, { dry: dryRun, scanned: summary.scanned, migrated: summary.migrated, merged: summary.merged_into_existing, errors: summary.errors.length });
+        res.json(summary);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get('/api/admin/logs', (req, res) => {

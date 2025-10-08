@@ -33,13 +33,17 @@ async function adminFetch(path, options={}) {
 
 // Éléments du DOM
 const addAlbumForm = document.getElementById('addAlbumForm');
-const releaseIdInput = document.getElementById('releaseId');
+// Passage aux masters: l'input dans le HTML est maintenant #masterId (anciennement #releaseId)
+const releaseIdInput = document.getElementById('masterId');
 const messageDiv = document.getElementById('message');
 const refreshLogsBtn = document.getElementById('refreshLogsBtn');
 const logsPanel = document.getElementById('logsPanel');
 const logsContainer = document.getElementById('logsContainer');
 const logsLimitSelect = document.getElementById('logsLimitSelect');
 const systemStatusBtn = document.getElementById('systemStatusBtn');
+const migrateMastersBtn = document.getElementById('migrateMastersBtn');
+const migrateMastersDryBtn = document.getElementById('migrateMastersDryBtn');
+const migrationStatusBox = document.getElementById('migrationStatus');
 const systemStatusPanel = document.getElementById('systemStatusPanel');
 const systemStatusContent = document.getElementById('systemStatusContent');
 const albumsContainer = document.getElementById('albumsContainer');
@@ -144,6 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
     initAdminDebug();
     if (systemStatusBtn) systemStatusBtn.addEventListener('click', handleSystemStatusToggle);
+    if (migrateMastersDryBtn) migrateMastersDryBtn.addEventListener('click', () => runMastersMigration(true));
+    if (migrateMastersBtn) migrateMastersBtn.addEventListener('click', () => runMastersMigration(false));
     // Initialiser références modal (présent après script dans le HTML)
     if (!albumModal) albumModal = document.getElementById('albumModal');
     if (!albumModalBody) albumModalBody = document.getElementById('albumModalBody');
@@ -474,14 +480,12 @@ async function loadAlbums() {
     }
 }
 
-// Ajout d'un nouvel album
+// Ajout d'un nouvel album (master)
 async function handleAddAlbum(event) {
     event.preventDefault();
-    
-    const releaseId = releaseIdInput.value.trim();
-    
-    if (!releaseId) {
-        showMessage('Veuillez entrer un numéro de release', 'error');
+    const masterId = releaseIdInput.value.trim();
+    if (!masterId) {
+        showMessage('Veuillez entrer un identifiant master', 'error');
         return;
     }
     
@@ -492,21 +496,21 @@ async function handleAddAlbum(event) {
         const response = await fetch(`${API_BASE_URL}/albums`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ releaseId: parseInt(releaseId, 10) }),
+            body: JSON.stringify({ masterId: parseInt(masterId, 10) }),
         });
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error || 'Erreur lors de l\'ajout de l\'album');
         }
-        showMessage('Album ajouté avec succès !', 'success');
-        releaseIdInput.value = '';
+    showMessage('Master ajouté avec succès !', 'success');
+    releaseIdInput.value = '';
         loadAlbums();
     } catch (error) {
         console.error('Erreur:', error);
         showMessage(error.message, 'error');
     } finally {
         submitButton.disabled = false;
-        submitButton.textContent = 'Ajouter l\'Album';
+        submitButton.textContent = 'Ajouter Master';
     }
 }
 
@@ -559,6 +563,18 @@ function renderAlbums() {
     if (albumPage > totalPages) albumPage = totalPages;
     const start = (albumPage - 1) * ALBUM_PAGE_SIZE;
     const pageSlice = filteredByYear.slice(start, start + ALBUM_PAGE_SIZE);
+    // Calcul legacy restants (release_id sans master_id)
+    const legacyCount = filteredByYear.filter(a => a.release_id && !a.master_id).length;
+    const legacyBadgeGlobal = document.getElementById('legacyBadgeGlobal');
+    if (legacyBadgeGlobal) {
+        if (legacyCount > 0) {
+            legacyBadgeGlobal.style.display='inline-block';
+            legacyBadgeGlobal.textContent = `legacy ${legacyCount}`;
+            legacyBadgeGlobal.title = `${legacyCount} album(s) à migrer (release -> master)`;
+        } else {
+            legacyBadgeGlobal.style.display='none';
+        }
+    }
     if (albumViewMode === 'grid') {
         albumsContainer.classList.remove('albums-list-view');
         albumsContainer.style.display='grid';
@@ -777,16 +793,18 @@ function createAlbumCard(album) { // modified to add data-album-id
     const coverImage = album.cover_image_url ? `<img src="${album.cover_image_url}" alt="Pochette de ${safeTitle}" class="album-cover">` : `<div class="album-cover cover-placeholder" role="img">🎵</div>`;
         const tileLabel = `${album.artist_name} – ${album.album_title}${year && year !== 'Année inconnue' ? ` (${year})` : ''}`;
         const appleUrl = buildAppleMusicUrl(album.artist_name, album.album_title);
-                return `
-                        <article class="album-tile ${cannotDelete ? 'in-use' : ''}" data-album-id="${album.id}" aria-label="${escapeHtml(tileLabel)}" data-id="${album.id}">
-        ${coverImage}
-        <div class="tile-overlay tile-overlay--minimal">
-          <div class="tile-info">
-            <p class="tile-artist">${safeArtist}</p>
-            <h3 class="tile-title">${safeTitle}</h3>
-          </div>
-        </div>
-      </article>`;
+        const isLegacy = album.release_id && !album.master_id;
+        const legacyMark = isLegacy ? '<span class="badge-legacy" title="Album legacy (release, non migré)">L</span>' : '';
+                                return `
+                                                <article class="album-tile ${cannotDelete ? 'in-use' : ''}" data-album-id="${album.id}" aria-label="${escapeHtml(tileLabel)}" data-id="${album.id}">
+                ${coverImage}
+                <div class="tile-overlay tile-overlay--minimal">
+                    <div class="tile-info">
+                        <p class="tile-artist">${safeArtist} ${legacyMark}</p>
+                        <h3 class="tile-title">${safeTitle}</h3>
+                    </div>
+                </div>
+            </article>`;
 }
 
 // Ouvrir le modal d'album
@@ -853,15 +871,16 @@ function buildAppleMusicUrl(artist, album) {
 function buildAlbumModalContent(a) {
   const safeTitle = escapeHtml(a.album_title); const safeArtist = escapeHtml(a.artist_name);
     const cover = a.cover_image_url ? `<img src="${a.cover_image_url}" alt="Pochette ${safeTitle}" class="modal-cover-img" data-zoomable="1">` : `<div class="cover-placeholder" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:4rem;">🎵</div>`;
-  const discogsLink = a.release_id ? `https://www.discogs.com/release/${a.release_id}` : null;
+    // Nouveau: lien master Discogs si master_id présent (fallback éventuel sur release_id si encore ancien enregistrement)
+    const discogsLink = a.master_id ? `https://www.discogs.com/master/${a.master_id}` : (a.release_id ? `https://www.discogs.com/release/${a.release_id}` : null);
     const appleUrl = buildAppleMusicUrl(a.artist_name, a.album_title);
   const metaEntries = [
     ['Année', a.release_year || '—'],
+    ['Artist ID', a.artist_id != null ? '#' + a.artist_id : '—'],
     ['Label', a.label || '—'],
-    ['Pays', a.country || '—'],
     ['Genre', a.genre || '—'],
     ['Style', a.style || '—'],
-    ['Release ID', a.release_id ? '#' + a.release_id : '—']
+        ['Master ID', a.master_id ? '#' + a.master_id : (a.release_id ? '(legacy r#'+a.release_id+')' : '—')]
   ];
   const metaHtml = metaEntries.map(([k,v]) => `<li><span class="label">${escapeHtml(k)}</span><span>${escapeHtml(String(v))}</span></li>`).join('');
   // Tracklist si info disponible dans album.extra_json (si le backend l'a stockée un jour)
@@ -878,13 +897,64 @@ function buildAlbumModalContent(a) {
       </div>
       <ul class="album-meta-list">${metaHtml}</ul>
             <div class="album-modal-actions">
-                ${discogsLink ? `<a href="${discogsLink}" target="_blank" rel="noopener" title="Ouvrir sur Discogs">Discogs ↗</a>` : ''}
+                                ${discogsLink ? `<a href="${discogsLink}" target="_blank" rel="noopener" title="Ouvrir sur Discogs (master)">Discogs ↗</a>` : ''}
                                 <a href="${appleUrl}" target="_blank" rel="noopener" title="Écouter sur Apple Music" class="apple-link strong"> Music</a>
                                 <button type="button" class="modal-refresh-btn" data-album-id="${a.id}" title="Rafraîchir metadata Discogs">↻ Rafraîchir</button>
                                 <button type="button" class="modal-delete-btn" data-album-id="${a.id}" title="Supprimer cet album">🗑 Supprimer</button>
             </div>
       ${tracklistHtml}
     </div>`;
+}
+
+// ================== Migration Releases -> Masters ==================
+async function runMastersMigration(dry) {
+    if (!migrationStatusBox) return;
+    const btnDry = migrateMastersDryBtn; const btnGo = migrateMastersBtn;
+    const restore = [];
+    [btnDry, btnGo].forEach(b=>{ if (b) { restore.push([b, b.disabled, b.textContent]); b.disabled=true; }});
+    if (btnDry && dry) btnDry.textContent='Simulation…';
+    if (btnGo && !dry) btnGo.textContent='Migration…';
+    migrationStatusBox.style.display='block';
+    migrationStatusBox.textContent = dry ? 'Simulation en cours…' : 'Migration en cours…';
+    try {
+        const qs = dry ? '?dry=1' : '';
+        const res = await fetch(`/api/admin/migrate/masters${qs}`, { method:'POST', headers: getAdminHeaders({'Content-Type':'application/json'}) });
+        let data = {};
+        try { data = await res.json(); } catch {}
+        if (!res.ok) throw new Error(data.error || 'Erreur HTTP '+res.status);
+        renderMigrationResult(data, dry);
+        // Rechargement des albums pour refléter la migration
+        loadAlbums();
+    } catch (e) {
+        migrationStatusBox.textContent = 'Erreur: ' + e.message;
+    } finally {
+        restore.forEach(([b, dis, txt])=>{ b.disabled=dis; b.textContent=txt; });
+    }
+}
+
+function renderMigrationResult(data, dry) {
+    if (!migrationStatusBox) return;
+    const lines = [];
+    lines.push((dry? 'Simulation':'Migration') + ' terminée');
+    lines.push(`Scanné: ${data.scanned}`);
+    lines.push(`Migrés: ${data.migrated}`);
+    if (data.merged_into_existing) lines.push(`Fusionnés: ${data.merged_into_existing}`);
+    if (data.skipped_no_master_id) lines.push(`Sans master: ${data.skipped_no_master_id}`);
+    if (data.skipped_already_has_master) lines.push(`Déjà master: ${data.skipped_already_has_master}`);
+    if (Array.isArray(data.errors) && data.errors.length) {
+        lines.push(`Erreurs: ${data.errors.length}`);
+        data.errors.slice(0,10).forEach(err => {
+            lines.push(`  - release ${err.release_id} (album ${err.album_id}): ${err.error}`);
+        });
+        if (data.errors.length > 10) lines.push(`  ... +${data.errors.length-10} autres`);
+    }
+    // Détails (limités)
+    if (Array.isArray(data.details) && data.details.length) {
+        const show = data.details.slice(-10); // dernières actions
+        lines.push('Dernières actions:');
+        show.forEach(d => lines.push(`  * ${d.type} release=${d.release_id} -> master=${d.master_id||'-'} album=${d.album_id||d.legacy_album_id||'-'}`));
+    }
+    migrationStatusBox.textContent = lines.join('\n');
 }
 
 // Ajout fonction de rafraîchissement (si non définie précédemment)
@@ -894,7 +964,7 @@ if (typeof window.refreshAlbum !== 'function') {
         const id = parseInt(albumId,10);
         try {
             showMessage('Rafraîchissement…','info');
-            const res = await fetch(`${API_BASE_URL}/albums/${id}/refresh`, { method:'POST' });
+            const res = await fetch(`${API_BASE_URL}/albums/${id}/refresh`, { method:'PATCH' });
             const data = await res.json().catch(()=>({}));
             if (!res.ok) throw new Error(data.error || 'Échec rafraîchissement');
             showMessage('Album rafraîchi','success');
@@ -1665,6 +1735,7 @@ function showMessage(text, type) {
         messageDiv.style.display = 'none';
     }, 5000);
 }
+
 
 // Échappement HTML pour prévenir les attaques XSS
 function escapeHtml(text) {

@@ -104,6 +104,8 @@ async function createSchema(resolve, reject) {
         `CREATE TABLE IF NOT EXISTS albums (
             id SERIAL PRIMARY KEY,
             release_id INTEGER UNIQUE,
+            master_id INTEGER UNIQUE,
+            artist_id INTEGER,
             artist_name TEXT NOT NULL,
             album_title TEXT NOT NULL,
             release_year INTEGER,
@@ -145,9 +147,37 @@ async function createSchema(resolve, reject) {
     ];
     if (driver === 'pg') {
         for (const s of stmts) { await pgPool.query(s); }
+    // Migrations additives (idempotentes)
+    await pgPool.query('ALTER TABLE albums ADD COLUMN IF NOT EXISTS master_id INTEGER UNIQUE');
+    await pgPool.query('ALTER TABLE albums ADD COLUMN IF NOT EXISTS artist_id INTEGER');
+    await pgPool.query('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
     } else {
         try {
             stmts.forEach(s => sqliteDb.run(s));
+            // Migration: ajouter master_id / artist_id si absents (anciens schémas)
+            sqliteDb.all("PRAGMA table_info(albums)", (e, rows) => {
+                if (e || !Array.isArray(rows)) return; 
+                const hasMaster = rows.some(r => r.name === 'master_id');
+                const hasArtistId = rows.some(r => r.name === 'artist_id');
+                if (!hasMaster) {
+                    // Ajout sans contrainte UNIQUE (SQLite ne supporte pas l'ajout direct d'une colonne UNIQUE)
+                    sqliteDb.run('ALTER TABLE albums ADD COLUMN master_id INTEGER', (err) => {
+                        if (err) { /* ignore: si échec, pas de master_id */ return; }
+                        // Index unique (NULL autorisé plusieurs fois) – protège les valeurs non nulles
+                        sqliteDb.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_master_id ON albums(master_id)');
+                    });
+                } else {
+                    // S'assurer de l'index unique si la colonne existait déjà sans contrainte
+                    sqliteDb.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_master_id ON albums(master_id)');
+                }
+                if (!hasArtistId) {
+                    sqliteDb.run('ALTER TABLE albums ADD COLUMN artist_id INTEGER', ()=>{
+                        sqliteDb.run('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
+                    });
+                } else {
+                    sqliteDb.run('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
+                }
+            });
         } catch (e) {
             if (reject) return reject(e);
             throw e;

@@ -37,14 +37,14 @@
             <aside class="side-panel">
                 <section class="card add-album">
                     <div class="card-header">
-                        <h2>Ajouter un album</h2>
-                        <p class="card-subtitle">Renseignez un numéro de release Discogs pour enrichir votre collection.</p>
+                        <h2>Ajouter un album (Master)</h2>
+                        <p class="card-subtitle">Renseignez un identifiant <strong>master</strong> Discogs pour enrichir votre collection (regroupe les éditions).</p>
                     </div>
                     <form id="addAlbumForm" class="form-vertical">
-                        <label for="releaseId">Numéro de release Discogs</label>
+                        <label for="masterId">Identifiant master Discogs</label>
                         <div class="input-row">
-                            <input type="number" id="releaseId" name="releaseId" placeholder="Ex: 249504" required>
-                            <button type="submit" class="btn btn-primary">Ajouter</button>
+                            <input type="number" id="masterId" name="masterId" placeholder="Ex: 3055" required>
+                            <button type="submit" class="btn btn-primary">Ajouter Master</button>
                         </div>
                     </form>
                     <div id="message" class="message" role="status" aria-live="polite"></div>
@@ -64,7 +64,7 @@
 
                 <section class="collection" id="albumsSection">
                     <div class="section-heading">
-                        <h2>Les albums</h2>
+                        <h2>Les albums <span id="legacyBadgeGlobal" class="legacy-badge-global" style="display:none; font-size:.8rem; font-weight:500; background:var(--warn-bg,#b86); color:var(--warn-fg,#fff); padding:2px 6px; border-radius:4px; vertical-align:middle;">legacy</span></h2>
                         <div class="album-toolbar">
                             <button type="button" id="albumViewToggle" class="btn-ghost" aria-label="Basculer vue" title="Basculer vue mosaïque / liste">🗃️</button>
                             <label for="albumSearch" class="sr-only">Filtrer les albums</label>
@@ -214,7 +214,10 @@
                             <option value="500">500</option>
                         </select>
                         <button id="systemStatusBtn" class="btn-ghost">Santé système</button>
+                        <button id="migrateMastersDryBtn" class="btn-ghost" title="Simulation migration releases -> masters">Dry‑run Masters</button>
+                        <button id="migrateMastersBtn" class="btn btn-primary" title="Migrer les albums legacy (release -> master)">Migrer Masters</button>
                     </div>
+                    <div id="migrationStatus" class="migration-status" style="display:none; margin-top:.75rem; font-size:.8rem; line-height:1.4; white-space:pre-wrap; background:var(--panel-bg); padding:.6rem .8rem; border:1px solid var(--border-color); border-radius:6px; max-height:260px; overflow:auto;"></div>
                     <div id="systemStatusPanel" class="system-status card" style="display:none; margin:12px 0;">
                         <div class="card-header compact"><h3>Santé système</h3></div>
                         <div id="systemStatusContent" class="system-status-content">Chargement…</div>

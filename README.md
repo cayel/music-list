@@ -4,8 +4,8 @@ Application web légère pour gérer une collection d'albums avec intégration D
 
 ## Fonctionnalités principales
 
-- 🎵 Ajout d'albums par numéro de release Discogs
-- 🔄 Rafraîchissement ciblé des métadonnées d'un album depuis Discogs
+- 🎵 Ajout d'albums par identifiant master Discogs (champ master_id unique)
+- 🔄 Rafraîchissement ciblé des métadonnées d'un album depuis Discogs (via master + main_release pour labels)
 - 📚 Grille mosaïque responsive (filtre texte + année exacte) + vue compacte
 - 🧾 Listes classées avec réordonnancement par glisser-déposer (algorithmes adaptés SQLite / Postgres)
 - 🏷️ Tags de listes (ajout / suppression) + compteur d'utilisation consolidé
@@ -13,18 +13,20 @@ Application web légère pour gérer une collection d'albums avec intégration D
 - 🛠️ Administration : export JSON, import transactionnel (remapping IDs + skip doublons), rebuild, santé, panneau statut système
 - 🪵 Journalisation structurée (albums, listes, items, tags, admin) avec coloration par catégorie
 - 📊 Statistiques (distribution des années, genres/styles) générées côté client (Canvas)
-- 🖼️ Modal plein écran enrichi (zoom pochette, détails, lien Discogs, bouton « copier release ID »)
+- 🖼️ Modal plein écran enrichi (zoom pochette, détails, IDs master & artiste, lien Discogs master)
 - 🩺 Panneau Système : métriques process, taille DB, counts, version + hash git (/api/admin/system)
 - 💾 Multi-base : SQLite (local) OU Postgres (auto-détection + migration facile)
-- 🔐 Protection optionnelle des endpoints admin par jeton
+- � Migration interne release→master avec dry-run, fusion intelligente et badges legacy
+- 🏷️ Badges « legacy » sur les albums non encore migrés + compteur global
+- �🔐 Protection optionnelle des endpoints admin par jeton
 - 🏷️ Badges d'environnement & version (package.json + hash git courts) en header / footer
 - 🎨 Thème clair/sombre acier/bleu
 
-Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre (supprimé), rafraîchissement global massif (endpoint supprimé), pagination.
+Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre (supprimé), ajout direct par numéro de release (remplacé par master), bouton copier release ID, section outils de recherche Discogs, endpoint de rafraîchissement global massif, pagination.
 
 ## Données persistées
 
-Albums : `artist_name`, `album_title`, `release_year`, `genre`, `style`, `label`, `cover_image_url`, `release_id`, timestamps, usage dans listes (compteur dérivé).
+Albums : `master_id` (unique), `release_id` (legacy, peut être NULL, utilisé seulement pour migration), `artist_id`, `artist_name`, `album_title`, `release_year`, `genre`, `style`, `label`, `cover_image_url`, timestamps, usage dans listes (compteur dérivé).
 
 Listes : `name`, `description`, items ordonnés (table séparée), tags (table relationnelle), timestamps.
 
@@ -99,15 +101,15 @@ L'API accepte donc un sous-ensemble d'IDs; les éléments omis conservent leur o
 
 ## Mode d'emploi rapide
 
-1. Trouver le numéro de release Discogs (ex: URL `.../release/249504` ⇒ `249504`).
-2. Saisir le numéro dans le formulaire de la colonne gauche et valider.
+1. Trouver l'identifiant master Discogs (ex: URL `.../master/249504` ⇒ `249504`).
+2. Saisir cet identifiant dans le formulaire (champ masterId) et valider.
 3. Filtrer / rechercher via la barre (texte + année exacte).
 4. Passer en onglet Listes : créer une liste, ajouter des albums (auto-complétion locale ou releaseId), activer le mode édition pour réordonner.
 5. Ajouter des tags de liste pour le regroupement (affichage badge + stats de tags).
-6. Clic pochette ➜ modal détail + lien Discogs.
+6. Clic pochette ➜ modal détail + lien Discogs master.
    - Zoom : clic sur l'image agrandit / réduit (classe CSS `.zoomed`).
-   - Copie release ID : bouton dédié (feedback visuel via changement de label).
-   - Lien direct Discogs (nouvel onglet).
+   - Visualisation des IDs : master_id (cliquable vers Discogs) et artist_id.
+   - Lien direct Discogs master (nouvel onglet).
 7. Onglet Statistiques ➜ visualiser graphiques (années, genres/styles) calculés côté client.
 8. Onglet Administration ➜ exporter/importer JSON, vérifier ou reconstruire la base, consulter le journal.
 
@@ -191,13 +193,13 @@ L'application est volontairement minimaliste (zéro framework front) mais struct
 
 ### Modèle de données (résumé)
 ```
-albums(id, release_id UNIQUE, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at)
+albums(id, master_id UNIQUE, release_id UNIQUE NULLABLE, artist_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at, updated_at)
 lists(id, name, description, created_at)
 list_items(id, list_id FK, album_id FK, position INT, created_at)
 list_tags(id, list_id FK, tag TEXT, created_at)
 operation_logs(id, action, entity_type, entity_id, info JSON, created_at)
 ```
-Index implicites : clés primaires + unique release_id. (Indices supplémentaires à ajouter si croissance.)
+Index implicites : clés primaires + unique master_id (+ index unique release_id hérités si présents). (Indices supplémentaires à ajouter si croissance.)
 
 ### Stratégie de positions
 Assure séquence compacte (1…N) :
@@ -253,10 +255,10 @@ Idées : compteur d'erreurs agrégé, histogramme latences (wrap `db.run`), endp
 ## API (vue synthétique actuelle)
 
 Albums
-- `GET /api/albums` – liste + usage counts
-- `POST /api/albums` – ajout `{ releaseId }`
+- `GET /api/albums` – liste + usage counts (renvoie master_id, legacy release_id s'il existe)
+- `POST /api/albums` – ajout `{ masterId }`
 - `DELETE /api/albums/:id` – suppression conditionnelle
-- `PATCH /api/albums/:id/refresh` – rafraîchit les métadonnées
+- `PATCH /api/albums/:id/refresh` – rafraîchit les métadonnées via master
 - `GET /api/albums/search?q=...` – recherche locale (auto-complétion)
 
 Listes
@@ -266,7 +268,7 @@ Listes
 - `GET /api/lists/:id` – détail + items ordonnés
 - `PUT /api/lists/:id` – maj nom / description
 - `DELETE /api/lists/:id` – supprimer
-- `POST /api/lists/:id/items` – ajoute album existant ou via releaseId
+- `POST /api/lists/:id/items` – ajoute album existant ou via masterId (création implicite si absent)
 - `PUT /api/lists/:id/items/order` – réordonner
 - `DELETE /api/lists/:id/items/:itemId` – retirer
 
@@ -283,7 +285,28 @@ Administration / Base
 - `POST /api/admin/import` – import JSON (transactionnel)
 - `GET /api/admin/logs?limit=N` – journal des opérations
 
-Remarque : endpoints supprimés / non implémentés volontairement (`/api/albums/by-artist-title`, `/api/albums/refresh-all`).
+Remarque : endpoints supprimés / non implémentés volontairement (`/api/albums/by-artist-title`, `/api/albums/refresh-all`, `/api/discogs/search`).
+
+### Migration release → master
+
+Endpoint d'administration : `POST /api/admin/migrate/masters`
+
+Paramètres query :
+- `dry=1` : simulation (aucune écriture)
+- `merge=1|0` : fusionner (par défaut 1) les albums legacy dans un album déjà présent portant le même master (rewire des items + suppression doublon)
+- `limit=N` : limite le nombre d'albums legacy traités (utile pour migrations progressives)
+
+Stratégies :
+1. Pour chaque album legacy (`master_id` NULL, `release_id` non NULL) on récupère la release puis son `master_id`.
+2. Si un album avec ce master existe et `merge=1`: les items sont rebranchés, l'album legacy potentiellement supprimé.
+3. Sinon la ligne legacy est enrichie in-place (`master_id` + métadonnées master + labels via main_release).
+4. Résumé détaillé retourné (scanned, migrated, merged_into_existing, errors...).
+
+Badges UI :
+- Global : nombre d'albums legacy restants.
+- Par vignette : badge « legacy » si l'album n'a pas encore de master.
+
+Après migration complète les badges disparaissent.
 
 ## Journalisation
 
