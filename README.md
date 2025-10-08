@@ -16,17 +16,15 @@ Application web légère pour gérer une collection d'albums avec intégration D
 - 🖼️ Modal plein écran enrichi (zoom pochette, détails, IDs master & artiste, lien Discogs master)
 - 🩺 Panneau Système : métriques process, taille DB, counts, version + hash git (/api/admin/system)
 - 💾 Multi-base : SQLite (local) OU Postgres (auto-détection + migration facile)
-- � Migration interne release→master avec dry-run, fusion intelligente et badges legacy
-- 🏷️ Badges « legacy » sur les albums non encore migrés + compteur global
-- �🔐 Protection optionnelle des endpoints admin par jeton
+- � Protection optionnelle des endpoints admin par jeton
 - 🏷️ Badges d'environnement & version (package.json + hash git courts) en header / footer
 - 🎨 Thème clair/sombre acier/bleu
 
-Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre (supprimé), ajout direct par numéro de release (remplacé par master), bouton copier release ID, section outils de recherche Discogs, endpoint de rafraîchissement global massif, pagination.
+Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre, ajout direct par numéro de release, bouton copier release ID, section outils de recherche Discogs, endpoint de rafraîchissement global massif, pagination, outil de migration (devenu inutile après adoption totale de master_id).
 
 ## Données persistées
 
-Albums : `master_id` (unique), `release_id` (legacy, peut être NULL, utilisé seulement pour migration), `artist_id`, `artist_name`, `album_title`, `release_year`, `genre`, `style`, `label`, `cover_image_url`, timestamps, usage dans listes (compteur dérivé).
+Albums : `master_id` (unique), `artist_id`, `artist_name`, `album_title`, `release_year`, `genre`, `style`, `label`, `cover_image_url`, timestamps, usage dans listes (compteur dérivé). (Ancien champ `release_id` considéré obsolète si encore présent physiquement.)
 
 Listes : `name`, `description`, items ordonnés (table séparée), tags (table relationnelle), timestamps.
 
@@ -86,7 +84,6 @@ Lors d'un import JSON:
 
 Conséquence:
 - Les IDs internes peuvent changer après migration vers Postgres, mais les relations restent cohérentes.
-- Le champ `release_id` (Discogs) reste stable et peut servir d'identifiant fonctionnel.
 
 Lors de l'import, si un album avec le même `release_id` existe déjà, il est **ignoré proprement** (skipped) pour éviter les violations d'unicité, et les items/tags associés pointent vers l'album existant (mise à jour du mapping). En cas de référence introuvable durant l'import, la transaction (Postgres) est annulée et une erreur claire est renvoyée.
 
@@ -169,9 +166,9 @@ L'application est volontairement minimaliste (zéro framework front) mais struct
 ### Flux principaux
 
 1. Ajout d'un album
-   1. Front envoie `POST /api/albums { releaseId }`.
-   2. Serveur vérifie présence locale (unicité `release_id`).
-   3. Si absent : requête Discogs (token si disponible) → normalisation (genres/styles concaténés).
+   1. Front envoie `POST /api/albums { masterId }`.
+   2. Serveur vérifie présence locale (unicité `master_id`).
+   3. Si absent : requête Discogs master + main_release (token si disponible) → normalisation (genres/styles concaténés + labels).
    4. Insertion + ligne de log `album.add`.
    5. Réponse JSON (album enrichi) → rendu dynamique.
 
@@ -183,7 +180,7 @@ L'application est volontairement minimaliste (zéro framework front) mais struct
 
 3. Import JSON
    - Parse → préparation mapping.
-   - Précharge release_ids existants (évite doublons : skip + mapping).
+   - Précharge les identifiants d'albums existants pour éviter les doublons (skip + mapping).
    - Postgres : transaction complète (albums → lists → list_items/tags remappés). Rollback sur incohérence.
    - SQLite : séquence d'inserts (pas de transaction globale volontaire pour simplicité, mais cohérence assurée par remapping et contraintes FK).
    - Logs agrégés (compteurs d'ajout). 
@@ -193,7 +190,7 @@ L'application est volontairement minimaliste (zéro framework front) mais struct
 
 ### Modèle de données (résumé)
 ```
-albums(id, master_id UNIQUE, release_id UNIQUE NULLABLE, artist_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at, updated_at)
+albums(id, master_id UNIQUE, artist_id, artist_name, album_title, release_year, genre, style, label, cover_image_url, created_at, updated_at)
 lists(id, name, description, created_at)
 list_items(id, list_id FK, album_id FK, position INT, created_at)
 list_tags(id, list_id FK, tag TEXT, created_at)
@@ -227,7 +224,7 @@ Chaque mutation écrit une ligne contextualisée (info JSON compacte). Permet au
 ### Performance & Scalabilité légère
 - Aucune stateful session côté serveur (stateless HTTP). 
 - Disques : SQLite pour usage local simple; Postgres recommandé dès déploiement cloud.
-- Import volumineux optimisé : préchargement des release_ids existants en un seul `SELECT`.
+- Import volumineux optimisé : préchargement des identifiants d'albums existants en un seul `SELECT`.
 - Réordonnancement O(N) avec une seule requête Postgres ou deux passes SQLite.
 
 ### Extensibilité
@@ -255,7 +252,7 @@ Idées : compteur d'erreurs agrégé, histogramme latences (wrap `db.run`), endp
 ## API (vue synthétique actuelle)
 
 Albums
-- `GET /api/albums` – liste + usage counts (renvoie master_id, legacy release_id s'il existe)
+- `GET /api/albums` – liste + usage counts (renvoie master_id)
 - `POST /api/albums` – ajout `{ masterId }`
 - `DELETE /api/albums/:id` – suppression conditionnelle
 - `PATCH /api/albums/:id/refresh` – rafraîchit les métadonnées via master
@@ -285,28 +282,10 @@ Administration / Base
 - `POST /api/admin/import` – import JSON (transactionnel)
 - `GET /api/admin/logs?limit=N` – journal des opérations
 
-Remarque : endpoints supprimés / non implémentés volontairement (`/api/albums/by-artist-title`, `/api/albums/refresh-all`, `/api/discogs/search`).
+Remarque : endpoints supprimés / non implémentés volontairement (`/api/albums/by-artist-title`, `/api/albums/refresh-all`, `/api/discogs/search`, `/api/admin/migrate/masters`).
 
-### Migration release → master
-
-Endpoint d'administration : `POST /api/admin/migrate/masters`
-
-Paramètres query :
-- `dry=1` : simulation (aucune écriture)
-- `merge=1|0` : fusionner (par défaut 1) les albums legacy dans un album déjà présent portant le même master (rewire des items + suppression doublon)
-- `limit=N` : limite le nombre d'albums legacy traités (utile pour migrations progressives)
-
-Stratégies :
-1. Pour chaque album legacy (`master_id` NULL, `release_id` non NULL) on récupère la release puis son `master_id`.
-2. Si un album avec ce master existe et `merge=1`: les items sont rebranchés, l'album legacy potentiellement supprimé.
-3. Sinon la ligne legacy est enrichie in-place (`master_id` + métadonnées master + labels via main_release).
-4. Résumé détaillé retourné (scanned, migrated, merged_into_existing, errors...).
-
-Badges UI :
-- Global : nombre d'albums legacy restants.
-- Par vignette : badge « legacy » si l'album n'a pas encore de master.
-
-Après migration complète les badges disparaissent.
+### Note historique
+Une ancienne phase de migration interne (release_id → master_id) a existé puis a été supprimée. Tout le code associé (endpoint, badges, UI) a été retiré après finalisation : la collection est désormais exclusivement adressée par `master_id`.
 
 ## Journalisation
 
@@ -374,9 +353,9 @@ Le code active automatiquement `ssl: { rejectUnauthorized: false }` pour certain
 - Filtrage/tooltip interactif des charts
 - Sauvegarde préférences utilisateur (vue mosaïque, etc.)
 - Export partiel (sélection de listes seulement)
-- Endpoint de recherche/fusion d'albums en doublon
+ - Endpoint de recherche/fusion d'albums en doublon
  - Rafraîchissement programmatique d'une liste entière (batch contrôlé)
- - Index supplémentaires si volume > 50k (année, (list_id, position), release_id)
+ - Index supplémentaires si volume > 50k (année, (list_id, position))
  - Tests automatisés (actuellement absents)
 
 ## Contribution
