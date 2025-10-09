@@ -136,6 +136,13 @@ async function createSchema(resolve, reject) {
             tag TEXT NOT NULL,
             UNIQUE(list_id, tag)
         )`,
+        `CREATE TABLE IF NOT EXISTS smart_lists (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            criteria_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
         `CREATE TABLE IF NOT EXISTS operation_logs (
             id SERIAL PRIMARY KEY,
             action TEXT NOT NULL,
@@ -153,7 +160,13 @@ async function createSchema(resolve, reject) {
     await pgPool.query('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
     } else {
         try {
-            stmts.forEach(s => sqliteDb.run(s));
+            // Adapter le schéma pour SQLite (SERIAL n'est pas natif) avant exécution
+            stmts.forEach(raw => {
+                let s = raw;
+                // Remplacer 'id SERIAL PRIMARY KEY' par 'id INTEGER PRIMARY KEY AUTOINCREMENT' pour SQLite
+                s = s.replace(/id\s+SERIAL\s+PRIMARY\s+KEY/gi, 'id INTEGER PRIMARY KEY AUTOINCREMENT');
+                sqliteDb.run(s);
+            });
             // Migration: ajouter master_id / artist_id si absents (anciens schémas)
             sqliteDb.all("PRAGMA table_info(albums)", (e, rows) => {
                 if (e || !Array.isArray(rows)) return; 
@@ -176,6 +189,28 @@ async function createSchema(resolve, reject) {
                     });
                 } else {
                     sqliteDb.run('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
+                }
+            });
+            // Vérifier smart_lists (si créée précédemment avec type non auto-incrément)
+            sqliteDb.all("PRAGMA table_info(smart_lists)", (e, rows) => {
+                if (e || !Array.isArray(rows) || !rows.length) return; // pas de table
+                const idCol = rows.find(r => r.name === 'id');
+                if (idCol && !(String(idCol.type).toUpperCase().includes('INT') && idCol.pk === 1)) {
+                    // Recréation : on sauvegarde données existantes si possible
+                    sqliteDb.serialize(()=>{
+                        sqliteDb.run('ALTER TABLE smart_lists RENAME TO smart_lists__old');
+                        sqliteDb.run(`CREATE TABLE smart_lists (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL,
+                            description TEXT,
+                            criteria_json TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )`);
+                        sqliteDb.run(`INSERT INTO smart_lists (name, description, criteria_json, created_at)
+                                      SELECT name, description, criteria_json, COALESCE(created_at, CURRENT_TIMESTAMP)
+                                      FROM smart_lists__old`);
+                        sqliteDb.run('DROP TABLE smart_lists__old');
+                    });
                 }
             });
         } catch (e) {

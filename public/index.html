@@ -28,6 +28,7 @@
             <ul>
                 <li><a href="#" class="nav-link active" data-section="albums">Les albums</a></li>
                 <li><a href="#" class="nav-link" data-section="lists">Listes classées</a></li>
+                <li><a href="#" class="nav-link" data-section="smartlists">Listes intelligentes</a></li>
                 <li><a href="#" class="nav-link" data-section="stats">Statistiques</a></li>
                 <li><a href="#" class="nav-link" data-section="admin">Administration</a></li>
             </ul>
@@ -127,6 +128,25 @@
                     <div id="listsContainer" class="lists-container" aria-labelledby="lists-existing-heading"></div>
                     <div id="listsPagination" class="lists-pagination" aria-label="Pagination listes" style="display:none;"></div>
                     <div id="listDetails" class="list-details" style="display:none"></div>
+                </section>
+                <section class="smartlists" id="smartlistsSection" style="display:none;">
+                    <div class="section-heading">
+                        <h2>Listes intelligentes</h2>
+                        <p class="section-subtitle">Listes dynamiques basées sur des critères.</p>
+                    </div>
+                    <div class="smartlists-layout">
+                        <div class="smartlists-left">
+                            <div class="smartlists-toolbar">
+                                <button id="openCreateSmartListBtn" class="btn-primary btn" type="button">➕ Nouvelle liste intelligente</button>
+                            </div>
+                            <h3 style="margin-top:18px; font-size:.85rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-soft);">Listes intelligentes existantes</h3>
+                            <input type="search" id="smartListFilter" placeholder="Filtrer par nom…" class="smartlist-filter" aria-label="Filtrer smart lists" />
+                            <ul id="smartListNav" class="smartlist-nav"></ul>
+                        </div>
+                        <div class="smartlists-right">
+                            <div id="smartListDetails" class="smartlist-details" aria-live="polite"></div>
+                        </div>
+                    </div>
                 </section>
                 <section class="stats-page" id="statsSection" style="display:none;">
                     <div class="section-heading">
@@ -272,5 +292,36 @@
         </div>
     </div>
     <footer class="site-footer">Interface enrichie · <a href="https://www.discogs.com/" target="_blank" rel="noopener">Discogs</a> API — <span id="footerVersion">version</span></footer>
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <!-- Modale création Liste intelligente -->
+    <div id="smartListCreateModal" class="sl-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="slCreateTitle" style="display:none;">
+        <div class="sl-modal-backdrop" data-sl-close></div>
+        <div class="sl-modal-dialog">
+            <div class="sl-modal-header">
+                <h3 id="slCreateTitle">Nouvelle liste intelligente</h3>
+                <button class="sl-modal-close" data-sl-close aria-label="Fermer">×</button>
+            </div>
+            <div class="sl-modal-body">
+                <form id="createSmartListForm" class="smart-form in-modal">
+                    <input type="text" id="slName" placeholder="Nom" required>
+                    <textarea id="slDesc" placeholder="Description (optionnel)"></textarea>
+                    <fieldset class="sl-criteria">
+                        <legend>Critères</legend>
+                        <label>Année min <input type="number" id="slYearMin" min="1900" max="2100"></label>
+                        <label>Année max <input type="number" id="slYearMax" min="1900" max="2100"></label>
+                        <label>Genres contient <input type="text" id="slGenreIncludes" placeholder="Jazz, Rock"></label>
+                        <label>Exclure genres <input type="text" id="slGenreExcludes" placeholder="Electronic"></label>
+                        <label>Styles contient <input type="text" id="slStyleIncludes" placeholder="Hard Bop, Ambient"></label>
+                        <label>Exclure styles <input type="text" id="slStyleExcludes" placeholder="Compilation"></label>
+                        <label>Limite résultats <input type="number" id="slLimit" min="1" max="1000" value="200"></label>
+                    </fieldset>
+                    <div class="sl-actions-row">
+                        <button type="submit" class="btn btn-primary">Créer</button>
+                    </div>
+                    <div id="slCreateMsg" class="mini-msg" aria-live="polite"></div>
+                </form>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

@@ -116,6 +116,9 @@ let listFilterName = '';
 let listFilterTag = '';
 let listPage = 1;
 const LIST_PAGE_SIZE = 10;
+// Smart lists state
+let smartLists = [];
+let smartListActiveId = null;
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
@@ -193,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
       });
     }
+    initSmartListsUI();
 });
 
     async function loadStatus() {
@@ -420,21 +424,32 @@ function initNavigation() {
                 if (target === 'lists') {
                     albumsSection.style.display = 'none';
                     listsSection.style.display = '';
+                    const smartlistsSection = document.getElementById('smartlistsSection'); if (smartlistsSection) smartlistsSection.style.display='none';
                     if (adminSection) adminSection.style.display='none';
                     if (statsSectionEl) statsSectionEl.style.display='none';
                     if (statsBar) statsBar.style.display='none';
                 } else if (target === 'admin') {
                     albumsSection.style.display = 'none';
                     listsSection.style.display = 'none';
+                    const smartlistsSection = document.getElementById('smartlistsSection'); if (smartlistsSection) smartlistsSection.style.display='none';
                     if (adminSection) adminSection.style.display='';
                     if (statsSectionEl) statsSectionEl.style.display='none';
                     if (statsBar) statsBar.style.display='none';
                 } else if (target === 'stats') {
                     albumsSection.style.display = 'none';
                     listsSection.style.display = 'none';
+                    const smartlistsSection = document.getElementById('smartlistsSection'); if (smartlistsSection) smartlistsSection.style.display='none';
                     if (adminSection) adminSection.style.display='none';
                     if (statsSectionEl) { statsSectionEl.style.display=''; renderStatsPage(); }
                     if (statsBar) statsBar.style.display='none';
+                } else if (target === 'smartlists') {
+                    albumsSection.style.display = 'none';
+                    listsSection.style.display = 'none';
+                    const smartlistsSection = document.getElementById('smartlistsSection'); if (smartlistsSection) smartlistsSection.style.display='';
+                    if (adminSection) adminSection.style.display='none';
+                    if (statsSectionEl) statsSectionEl.style.display='none';
+                    if (statsBar) statsBar.style.display='none';
+                    fetchSmartLists();
                 }
             }
         });
@@ -444,6 +459,159 @@ function initNavigation() {
     if (statsSectionEl) statsSectionEl.style.display='none';
     // État initial: statsBar visible seulement sur l'onglet Albums
     if (statsBar) statsBar.style.display='grid';
+}
+
+// ========= LISTES INTELLIGENTES (ex Smart Lists) FRONT =========
+function initSmartListsUI() {
+    const navFilter = document.getElementById('smartListFilter');
+    if (navFilter) navFilter.addEventListener('input', ()=> renderSmartListNav());
+    const openBtn = document.getElementById('openCreateSmartListBtn');
+    const modal = document.getElementById('smartListCreateModal');
+    const form = document.getElementById('createSmartListForm');
+    const closeEls = modal ? modal.querySelectorAll('[data-sl-close]') : [];
+    function openModal(){ if (!modal) return; modal.style.display='block'; modal.setAttribute('aria-hidden','false'); setTimeout(()=> { const n=document.getElementById('slName'); if(n) n.focus(); }, 30); }
+    function closeModal(){ if (!modal) return; modal.setAttribute('aria-hidden','true'); modal.style.display='none'; }
+    if (openBtn) openBtn.addEventListener('click', openModal);
+    closeEls.forEach(el=> el.addEventListener('click', closeModal));
+    document.addEventListener('keydown', (e)=> { if (e.key==='Escape' && modal && modal.getAttribute('aria-hidden')==='false') closeModal(); });
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('slName').value.trim();
+            if (!name) { showToast('Nom requis','error'); return; }
+            const desc = document.getElementById('slDesc').value.trim() || null;
+            const criteria = collectSmartCriteria();
+            const msgEl = document.getElementById('slCreateMsg');
+            msgEl.textContent='Création…'; msgEl.style.color='var(--text-soft)';
+            try {
+                const r = await fetch('/api/smart-lists', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, description: desc, criteria }) });
+                const data = await r.json().catch(()=>({}));
+                if (!r.ok) throw new Error(data.error || 'Erreur création');
+                form.reset(); resetSmartCriteriaInputs();
+                msgEl.textContent='Créée'; msgEl.style.color='green';
+                showToast('Liste intelligente créée','success');
+                closeModal();
+                fetchSmartLists(()=> openSmartList(data.id));
+            } catch(e){ msgEl.textContent=e.message; msgEl.style.color='crimson'; showToast(e.message,'error'); }
+        });
+    }
+}
+
+function collectSmartCriteria() {
+    const parseCsv = (id) => (document.getElementById(id).value||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const yearMin = parseInt(document.getElementById('slYearMin').value,10);
+    const yearMax = parseInt(document.getElementById('slYearMax').value,10);
+    const limit = parseInt(document.getElementById('slLimit').value,10);
+    return {
+        genreIncludes: parseCsv('slGenreIncludes'),
+        genreExcludes: parseCsv('slGenreExcludes'),
+        styleIncludes: parseCsv('slStyleIncludes'),
+        styleExcludes: parseCsv('slStyleExcludes'),
+        yearMin: Number.isFinite(yearMin)? yearMin: undefined,
+        yearMax: Number.isFinite(yearMax)? yearMax: undefined,
+        limit: Number.isFinite(limit)? limit: 200
+    };
+}
+
+function resetSmartCriteriaInputs() {
+    ['slGenreIncludes','slGenreExcludes','slStyleIncludes','slStyleExcludes','slYearMin','slYearMax'].forEach(id=>{ const el = document.getElementById(id); if (el) el.value=''; });
+    const lim = document.getElementById('slLimit'); if (lim) lim.value='200';
+}
+
+async function fetchSmartLists(cb) {
+    try {
+        const r = await fetch('/api/smart-lists');
+        const data = await r.json();
+        smartLists = Array.isArray(data)? data: [];
+        renderSmartListNav();
+        if (cb) cb();
+    } catch(e){ console.error('[SmartLists]', e); }
+}
+
+function renderSmartListNav() {
+    const nav = document.getElementById('smartListNav');
+    if (!nav) return;
+    const filterValue = (document.getElementById('smartListFilter')?.value || '').trim().toLowerCase();
+    const list = filterValue ? smartLists.filter(sl => sl.name.toLowerCase().includes(filterValue)) : smartLists;
+    if (!list.length) { nav.innerHTML='<li><em style="font-size:.7rem;opacity:.6;">Aucun résultat.</em></li>'; return; }
+    nav.innerHTML = list.map(sl => {
+        const sid = (sl.id !== undefined && sl.id !== null) ? sl.id : '';
+        return `<li><button type="button" data-id="${sid}" class="${sid===smartListActiveId?'active':''}">${escapeHtml(sl.name)}${sid!==''?`<span style=\"opacity:.6;font-size:.55rem;\">#${sid}</span>`:''}</button></li>`;
+    }).join('');
+    nav.querySelectorAll('button').forEach(b=> b.addEventListener('click', ()=> {
+        const raw = b.getAttribute('data-id');
+        if (!raw) return;
+        const pid = parseInt(raw,10);
+        if (Number.isFinite(pid)) openSmartList(pid);
+    }));
+}
+
+
+// ===== Toasts =====
+function showToast(msg, type='info', timeout=4000) {
+    const cont = document.getElementById('toastContainer');
+    if (!cont) return alert(msg);
+    const el = document.createElement('div');
+    el.className = 'toast toast-'+type;
+    el.innerHTML = `<button class="toast-close" aria-label="Fermer">×</button><div>${escapeHtml(msg)}</div>`;
+    cont.appendChild(el);
+    const remove = ()=> { if (el._removed) return; el._removed=true; el.style.opacity='0'; el.style.transform='translateY(4px)'; setTimeout(()=> el.remove(), 350); };
+    el.querySelector('.toast-close').addEventListener('click', remove);
+    if (timeout>0) setTimeout(remove, timeout);
+}
+
+async function openSmartList(id) {
+    smartListActiveId = id;
+    renderSmartListNav();
+    const details = document.getElementById('smartListDetails');
+    if (!details) return;
+    details.innerHTML = '<div style="font-size:.75rem;opacity:.7;">Chargement…</div>';
+    try {
+        const r = await fetch(`/api/smart-lists/${id}`);
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok) {
+            const msg = data && data.error ? data.error : (r.status===404?'Liste intelligente non trouvée':'Erreur');
+            throw new Error(msg);
+        }
+        const itemsArr = Array.isArray(data.items) ? data.items : [];
+        // Structure homogène avec la grille principale d'albums
+    details.innerHTML = `<div class=\"sl-header\"><h3>${escapeHtml(data.name)}</h3><div class=\"sl-actions\"><button class=\"sm-ghost\" data-refresh=\"1\">Rafraîchir</button><button class=\"sm-danger\" data-delete=\"1\">Supprimer</button></div></div>
+            <div class=\"sl-meta\">${data.count} album(s)</div>
+            <div class=\"sl-items albums-grid\" id=\"smartListAlbumsGrid\">${itemsArr.length? '' : '<em style=\\"font-size:.7rem;opacity:.6;\\">Aucun album</em>'}</div>`;
+        if (itemsArr.length) {
+            const grid = document.getElementById('smartListAlbumsGrid');
+            if (grid) {
+                // createAlbumCard retourne une chaîne HTML, on construit donc innerHTML
+                grid.innerHTML = itemsArr.map(a => createAlbumCard(a)).join('');
+                // Associer chaque tuile à son objet album pour ouvrir le modal de détails
+                const byId = new Map(itemsArr.map(a => [String(a.id), a]));
+                Array.from(grid.querySelectorAll('.album-tile')).forEach(tile => {
+                    const aid = tile.getAttribute('data-album-id');
+                    if (!aid) return;
+                    const albumObj = byId.get(aid);
+                    if (!albumObj) return;
+                    tile.style.cursor = 'pointer';
+                    tile.addEventListener('click', () => openAlbumModal(albumObj));
+                });
+            }
+        }
+        const refreshBtn = details.querySelector('[data-refresh]');
+        const deleteBtn = details.querySelector('[data-delete]');
+        if (refreshBtn) refreshBtn.addEventListener('click', ()=> openSmartList(id));
+        if (deleteBtn) deleteBtn.addEventListener('click', ()=> deleteSmartList(id));
+    } catch(e){ details.innerHTML = `<div style='color:crimson;font-size:.75rem;'>${escapeHtml(e.message)}</div>`; }
+}
+
+async function deleteSmartList(id) {
+    if (!confirm('Supprimer cette liste intelligente ?')) return;
+    try {
+        const r = await fetch(`/api/smart-lists/${id}`, { method:'DELETE' });
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok) throw new Error(data.error||'Erreur suppression');
+        smartListActiveId = null;
+        fetchSmartLists();
+    const details = document.getElementById('smartListDetails'); if (details) details.innerHTML='<em style="font-size:.7rem;opacity:.6;">Sélectionnez une liste intelligente.</em>';
+    } catch(e) { alert(e.message); }
 }
 
 // Chargement des albums depuis l'API
