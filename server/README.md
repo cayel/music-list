@@ -132,6 +132,11 @@ Les modules de `routes/` reçoivent `(app, logOperation, helpers/driver)` et enr
 
 ---
 ## Endpoints
+### Documentation (Swagger / OpenAPI)
+- UI : `/api/docs`
+- JSON : `/api/openapi.json`
+
+La spécification est définie dans `server/openapi.yaml` et chargée au démarrage : le premier serveur voit son URL ajustée selon le port effectif.
 ### Albums
 | Méthode | URL | Description |
 |---------|-----|-------------|
