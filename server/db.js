@@ -1,13 +1,11 @@
-// db.js : couche d'abstraction SQLite / Postgres avec API similaire (run/get/all)
-// Usage attendu par server.js : db.run(sql, params, cb), db.get(...), db.all(...), db.close(cb), db.driver
-
+// db.js déplacé dans server/ pour cohérence structure backend
+// (contenu identique à l'ancienne racine)
 const usePg = !!(process.env.PG_CONNECTION_STRING || process.env.DATABASE_URL);
 let driver = 'sqlite';
 let sqliteDb = null;
 let pgPool = null;
 
 function convertPlaceholders(sql) {
-    // Remplace les '?' hors chaînes par $1, $2 ... pour Postgres
     let idx = 0; let out = ''; let inS = false; let inD = false;
     for (let i = 0; i < sql.length; i++) {
         const ch = sql[i];
@@ -26,11 +24,8 @@ async function init() {
         const conn = process.env.PG_CONNECTION_STRING || process.env.DATABASE_URL;
         const needsSsl = /render\.com|neon\.tech|supabase\.co/i.test(conn);
         const poolConfig = { connectionString: conn };
-        if (needsSsl) {
-            poolConfig.ssl = { rejectUnauthorized: false }; // simplifie config SSL managée
-        }
+        if (needsSsl) poolConfig.ssl = { rejectUnauthorized: false };
         pgPool = new Pool(poolConfig);
-        // Test de connexion
         await pgPool.query('SELECT 1');
         await createSchema();
         return;
@@ -44,16 +39,13 @@ async function init() {
     }
 }
 
-function ignoreIfPg(sql) {
-    return driver === 'pg' && /^\s*PRAGMA/i.test(sql);
-}
+function ignoreIfPg(sql) { return driver === 'pg' && /^\s*PRAGMA/i.test(sql); }
 
 function run(sql, params, cb) {
     if (typeof params === 'function') { cb = params; params = []; }
     params = params || [];
     if (driver === 'pg') {
         if (ignoreIfPg(sql)) return cb && cb(null);
-        // Ajout RETURNING pour insert si pas présent (pour lastID)
         let needsReturning = /^\s*insert/i.test(sql) && !/returning\s+id/i.test(sql);
         let finalSql = sql;
         if (needsReturning) finalSql = sql.replace(/;?\s*$/, '') + ' RETURNING id';
@@ -62,9 +54,7 @@ function run(sql, params, cb) {
             const ctx = { lastID: needsReturning && result.rows[0] ? result.rows[0].id : undefined, changes: result.rowCount };
             cb && cb.call(ctx, null);
         }).catch(err => cb && cb(err));
-    } else {
-        sqliteDb.run(sql, params, function(err){ cb && cb.call(this, err); });
-    }
+    } else { sqliteDb.run(sql, params, function(err){ cb && cb.call(this, err); }); }
 }
 
 function get(sql, params, cb) {
@@ -74,9 +64,7 @@ function get(sql, params, cb) {
         if (ignoreIfPg(sql)) return cb && cb(null, null);
         const finalSql = convertPlaceholders(sql);
         pgPool.query(finalSql, params).then(r => cb && cb(null, r.rows[0] || null)).catch(e => cb && cb(e));
-    } else {
-        sqliteDb.get(sql, params, cb);
-    }
+    } else { sqliteDb.get(sql, params, cb); }
 }
 
 function all(sql, params, cb) {
@@ -86,17 +74,12 @@ function all(sql, params, cb) {
         if (ignoreIfPg(sql)) return cb && cb(null, []);
         const finalSql = convertPlaceholders(sql);
         pgPool.query(finalSql, params).then(r => cb && cb(null, r.rows)).catch(e => cb && cb(e));
-    } else {
-        sqliteDb.all(sql, params, cb);
-    }
+    } else { sqliteDb.all(sql, params, cb); }
 }
 
 function close(cb) {
-    if (driver === 'pg') {
-        pgPool.end().then(() => cb && cb()).catch(e => cb && cb(e));
-    } else if (sqliteDb) {
-        sqliteDb.close(cb);
-    } else cb && cb();
+    if (driver === 'pg') pgPool.end().then(() => cb && cb()).catch(e => cb && cb(e));
+    else if (sqliteDb) sqliteDb.close(cb); else cb && cb();
 }
 
 async function createSchema(resolve, reject) {
@@ -154,50 +137,35 @@ async function createSchema(resolve, reject) {
     ];
     if (driver === 'pg') {
         for (const s of stmts) { await pgPool.query(s); }
-    // Migrations additives (idempotentes)
-    await pgPool.query('ALTER TABLE albums ADD COLUMN IF NOT EXISTS master_id INTEGER UNIQUE');
-    await pgPool.query('ALTER TABLE albums ADD COLUMN IF NOT EXISTS artist_id INTEGER');
-    await pgPool.query('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
+        await pgPool.query('ALTER TABLE albums ADD COLUMN IF NOT EXISTS master_id INTEGER UNIQUE');
+        await pgPool.query('ALTER TABLE albums ADD COLUMN IF NOT EXISTS artist_id INTEGER');
+        await pgPool.query('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
     } else {
         try {
-            // Adapter le schéma pour SQLite (SERIAL n'est pas natif) avant exécution
             stmts.forEach(raw => {
-                let s = raw;
-                // Remplacer 'id SERIAL PRIMARY KEY' par 'id INTEGER PRIMARY KEY AUTOINCREMENT' pour SQLite
-                s = s.replace(/id\s+SERIAL\s+PRIMARY\s+KEY/gi, 'id INTEGER PRIMARY KEY AUTOINCREMENT');
+                let s = raw.replace(/id\s+SERIAL\s+PRIMARY\s+KEY/gi, 'id INTEGER PRIMARY KEY AUTOINCREMENT');
                 sqliteDb.run(s);
             });
-            // Migration: ajouter master_id / artist_id si absents (anciens schémas)
-            sqliteDb.all("PRAGMA table_info(albums)", (e, rows) => {
-                if (e || !Array.isArray(rows)) return; 
+            sqliteDb.all('PRAGMA table_info(albums)', (e, rows) => {
+                if (e || !Array.isArray(rows)) return;
                 const hasMaster = rows.some(r => r.name === 'master_id');
                 const hasArtistId = rows.some(r => r.name === 'artist_id');
                 if (!hasMaster) {
-                    // Ajout sans contrainte UNIQUE (SQLite ne supporte pas l'ajout direct d'une colonne UNIQUE)
-                    sqliteDb.run('ALTER TABLE albums ADD COLUMN master_id INTEGER', (err) => {
-                        if (err) { /* ignore: si échec, pas de master_id */ return; }
-                        // Index unique (NULL autorisé plusieurs fois) – protège les valeurs non nulles
+                    sqliteDb.run('ALTER TABLE albums ADD COLUMN master_id INTEGER', () => {
                         sqliteDb.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_master_id ON albums(master_id)');
                     });
-                } else {
-                    // S'assurer de l'index unique si la colonne existait déjà sans contrainte
-                    sqliteDb.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_master_id ON albums(master_id)');
-                }
+                } else { sqliteDb.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_master_id ON albums(master_id)'); }
                 if (!hasArtistId) {
-                    sqliteDb.run('ALTER TABLE albums ADD COLUMN artist_id INTEGER', ()=>{
+                    sqliteDb.run('ALTER TABLE albums ADD COLUMN artist_id INTEGER', () => {
                         sqliteDb.run('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
                     });
-                } else {
-                    sqliteDb.run('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)');
-                }
+                } else { sqliteDb.run('CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id)'); }
             });
-            // Vérifier smart_lists (si créée précédemment avec type non auto-incrément)
-            sqliteDb.all("PRAGMA table_info(smart_lists)", (e, rows) => {
-                if (e || !Array.isArray(rows) || !rows.length) return; // pas de table
+            sqliteDb.all('PRAGMA table_info(smart_lists)', (e, rows) => {
+                if (e || !Array.isArray(rows) || !rows.length) return;
                 const idCol = rows.find(r => r.name === 'id');
                 if (idCol && !(String(idCol.type).toUpperCase().includes('INT') && idCol.pk === 1)) {
-                    // Recréation : on sauvegarde données existantes si possible
-                    sqliteDb.serialize(()=>{
+                    sqliteDb.serialize(() => {
                         sqliteDb.run('ALTER TABLE smart_lists RENAME TO smart_lists__old');
                         sqliteDb.run(`CREATE TABLE smart_lists (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -213,10 +181,7 @@ async function createSchema(resolve, reject) {
                     });
                 }
             });
-        } catch (e) {
-            if (reject) return reject(e);
-            throw e;
-        }
+        } catch (e) { if (reject) return reject(e); throw e; }
     }
     if (resolve) resolve();
 }

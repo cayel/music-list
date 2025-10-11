@@ -1,0 +1,335 @@
+openapi: 3.0.3
+info:
+  title: Music List API
+  version: 1.0.0
+  description: API de gestion d'albums, listes classées et listes intelligentes.
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/status:
+    get:
+      summary: Statut runtime
+      responses:
+        '200':
+          description: OK
+  /api/albums:
+    get:
+      summary: Liste des albums
+      responses:
+        '200': { description: Liste retournée }
+    post:
+      summary: Ajoute un album par masterId Discogs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ masterId ]
+              properties:
+                masterId:
+                  type: integer
+      responses:
+        '200': { description: Album ajouté }
+        '409': { description: Doublon }
+  /api/albums/{id}:
+    delete:
+      summary: Supprime un album (si non utilisé)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Supprimé }
+        '409': { description: En conflit (utilisé) }
+  /api/albums/{id}/refresh:
+    patch:
+      summary: Rafraîchit les métadonnées depuis Discogs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+  /api/albums/search:
+    get:
+      summary: Recherche locale albums
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/lists:
+    get:
+      summary: Liste des listes classées
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Crée une liste classée
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ name ]
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/lists/{id}:
+    get:
+      summary: Détails liste classée
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+    put:
+      summary: Met à jour nom / description
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      summary: Supprime une liste
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+  /api/lists/{id}/items:
+    post:
+      summary: Ajoute un album dans la liste
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                albumId: { type: integer }
+                masterId: { type: integer }
+      responses:
+        '200': { description: OK }
+  /api/lists/{id}/items/order:
+    put:
+      summary: Réordonne les items (partiel)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ order ]
+              properties:
+                order:
+                  type: array
+                  items: { type: integer }
+      responses:
+        '200': { description: OK }
+  /api/lists/{id}/items/{itemId}:
+    delete:
+      summary: Retire item de la liste
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: itemId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+  /api/lists/{id}/tags:
+    post:
+      summary: Ajoute un tag
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ tag ]
+              properties:
+                tag: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/lists/{id}/tags/{tag}:
+    delete:
+      summary: Supprime un tag
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: tag
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/smart-lists:
+    get:
+      summary: Liste des smart lists
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Crée une smart list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ name, criteria ]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                criteria:
+                  type: object
+                  properties:
+                    genreIncludes: { type: array, items: { type: string } }
+                    genreExcludes: { type: array, items: { type: string } }
+                    styleIncludes: { type: array, items: { type: string } }
+                    styleExcludes: { type: array, items: { type: string } }
+                    yearMin: { type: integer }
+                    yearMax: { type: integer }
+                    limit: { type: integer }
+      responses:
+        '200': { description: OK }
+  /api/smart-lists/{id}:
+    get:
+      summary: Détails smart list + résultats
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+    put:
+      summary: Met à jour smart list
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                criteria: { $ref: '#/paths/~1api~1smart-lists/post/requestBody/content/application~1json/schema/properties/criteria' }
+      responses:
+        '200': { description: OK }
+    delete:
+      summary: Supprime smart list
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+  /api/lists/generate/studio:
+    post:
+      summary: Génère liste albums studio d'un artiste
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ artist ]
+              properties:
+                artist: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/admin/health:
+    get:
+      summary: Santé base & tables
+      responses:
+        '200': { description: OK }
+  /api/admin/system:
+    get:
+      summary: Métriques système
+      responses:
+        '200': { description: OK }
+  /api/admin/rebuild:
+    post:
+      summary: Reconstruit schéma manquant
+      responses:
+        '200': { description: OK }
+  /api/admin/export:
+    get:
+      summary: Export JSON complet
+      responses:
+        '200': { description: OK }
+  /api/admin/import:
+    post:
+      summary: Import JSON
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200': { description: OK }
+  /api/admin/logs:
+    get:
+      summary: Logs récents
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 100 }
+      responses:
+        '200': { description: OK }
+components:
+  securitySchemes:
+    AdminToken:
+      type: apiKey
+      in: header
+      name: x-admin-token
+security:
+  - {}

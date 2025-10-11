@@ -8,15 +8,16 @@ Application web légère pour gérer une collection d'albums avec intégration D
 - 🔄 Rafraîchissement ciblé des métadonnées d'un album depuis Discogs (via master + main_release pour labels)
 - 📚 Grille mosaïque responsive (filtre texte + année exacte) + vue compacte
 - 🧾 Listes classées avec réordonnancement par glisser-déposer (algorithmes adaptés SQLite / Postgres)
+- 🤖 Listes intelligentes dynamiques (critères genres/styles IN/OUT, années min/max, limite) recalculées à l'ouverture
 - 🏷️ Tags de listes (ajout / suppression) + compteur d'utilisation consolidé
 - 🗑️ Suppression protégée (refus si l'album apparaît dans au moins une liste)
 - 🛠️ Administration : export JSON, import transactionnel (remapping IDs + skip doublons), rebuild, santé, panneau statut système
 - 🪵 Journalisation structurée (albums, listes, items, tags, admin) avec coloration par catégorie
-- 📊 Statistiques (distribution des années, genres/styles) générées côté client (Canvas)
+- 📊 Statistiques (distribution des années, genres/styles) générées côté client
 - 🖼️ Modal plein écran enrichi (zoom pochette, détails, IDs master & artiste, lien Discogs master)
 - 🩺 Panneau Système : métriques process, taille DB, counts, version + hash git (/api/admin/system)
 - 💾 Multi-base : SQLite (local) OU Postgres (auto-détection + migration facile)
-- � Protection optionnelle des endpoints admin par jeton
+- 🔐 Protection optionnelle des endpoints admin par jeton
 - 🏷️ Badges d'environnement & version (package.json + hash git courts) en header / footer
 - 🎨 Thème clair/sombre acier/bleu
 
@@ -45,25 +46,46 @@ Schéma reconstruit automatiquement si manquant (endpoint /admin/rebuild). Les l
    cp .env.example .env
    ```
 
-4. Démarrez l'application :
+4. Démarrez selon votre besoin :
    ```bash
-   npm run dev
+   # API seule (Express + DB + CORS)
+   npm run dev:api
+
+   # Client React (Vite) seul (utilise VITE_API_BASE si défini)
+   npm run dev:client
+
+   # API + Client en parallèle (développement complet)
+   npm run dev:full
    ```
 
-5. Ouvrez votre navigateur sur `http://localhost:3000`
+5. Accès :
+   - API : http://localhost:3000 (port de base, auto-incrément si occupé)
+   - Client : http://localhost:5173
 
 Optionnel : ajoutez `DISCOGS_TOKEN=<votre_token>` dans `.env` pour de meilleures métadonnées.
+
+### Documentation API (Swagger / OpenAPI)
+
+Disponible après démarrage :
+
+- UI : `http://localhost:<PORT>/api/docs`
+- JSON : `http://localhost:<PORT>/api/openapi.json`
+
+Source : `server/openapi.yaml` (le port effectif est injecté dynamiquement au lancement).
 
 ### Variables d'environnement principales
 
 | Variable | Rôle | Exemple |
 |----------|------|---------|
-| PORT | Port d'écoute local | 3000 |
+| PORT | Port d'écoute API | 3000 |
+| FRONT_ORIGIN | Origine CORS autorisée (client) | http://localhost:5173 |
 | DISCOGS_TOKEN | Token Discogs (optionnel) | abc123... |
 | ADMIN_TOKEN | Protège les endpoints /api/admin/* | unsecretfort |
-| DB_PATH | (SQLite) Chemin fichier DB | ./music_collection.db |
-| PG_CONNECTION_STRING | Chaîne de connexion Postgres (prioritaire) | postgres://user:pass@host:5432/dbname |
+| DB_PATH | (SQLite) Fichier DB local | ./music_collection.db |
+| PG_CONNECTION_STRING | Chaîne connexion Postgres (prioritaire) | postgres://user:pass@host:5432/dbname |
 | DATABASE_URL | Alias Heroku/Render (si PG_CONNECTION_STRING absent) | postgres://... |
+| VITE_API_BASE | Base URL API pour le client (dev séparé) | http://localhost:3000 |
+| ENV_NAME | Nom lisible d'environnement (badge UI) | local |
 
 Si `PG_CONNECTION_STRING` **ou** `DATABASE_URL` est défini, le driver Postgres est utilisé. Sinon, SQLite.
 
@@ -112,48 +134,59 @@ L'API accepte donc un sous-ensemble d'IDs; les éléments omis conservent leur o
 
 ## Scripts
 
-- `npm start` : Démarre l'application en mode production
-- `npm run dev` : Démarre l'application en mode développement avec nodemon
-- `npm test` : Lance les tests (non implémentés)
+- `npm start` : Démarre l'API (production) après build éventuel du client
+- `npm run dev:api` : API Express en watch (nodemon)
+- `npm run dev:client` : Client React (Vite) seul
+- `npm run dev:full` : API + Client en parallèle
+- `npm run build:client` : Build production du client
+- `npm run preview:client` : Prévisualiser le build client localement
+- `npm test` : (placeholder) tests non implémentés
 
 ## Technologies utilisées
 
 - **Backend** : Node.js, Express.js
-- **Base de données** : SQLite3
+- **Base de données** : SQLite3 (ou Postgres via abstraction)
 - **API** : Discogs API
-- **Frontend** : HTML, CSS, JavaScript (Vanilla)
-- **Autres** : Axios, CORS, dotenv
+- **Frontend (actuel)** : React + Vite + TypeScript + Material UI (thème custom)
+- **Frontend (legacy - supprimé)** : HTML/CSS/JS Vanilla (retiré : `public/script.js`, `public/styles.css`)
+- **Autres** : Axios (Discogs), CORS, dotenv
 
 ## Structure du projet
 
 ```
 music-list/
-├── public/
-│   ├── index.html      # Interface utilisateur
-│   ├── styles.css      # Styles CSS
-│   └── script.js       # JavaScript côté client
-├── server.js           # Serveur Express
-├── package.json        # Configuration npm
-├── .env.example        # Exemple de variables d'environnement
-└── README.md          # Ce fichier
+├── public/                      # Fichiers statiques (favicon, index minimal)
+├── client/                      # Frontend React (Vite + TS + MUI)
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── api.ts               # Helper central (VITE_API_BASE)
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── hooks/
+│   │   └── theme.ts
+│   └── index.html
+├── server/
+│   ├── index.js                 # Bootstrap Express + routes + Swagger (/api/docs)
+│   ├── db.js                    # Abstraction SQLite/Postgres (auto schema)
+│   ├── lib/
+│   │   └── discogs.js           # Intégration Discogs centralisée
+│   └── routes/                  # Découpage (albums, lists, smartLists, generate)
+├── .env.example
+├── package.json
+├── README.md
+└── music_collection.db*         # Fichier SQLite (si driver local)
 ```
 
-## Architecture
+Legacy retiré : `public/script.js`, `public/styles.css`, anciens `server.js` & `db.js` racine.
 
-### Vue d'ensemble
-
-L'application est volontairement minimaliste (zéro framework front) mais structurée autour de quelques blocs nets :
+## Architecture (vue d'ensemble)
 
 ```
-[ Navigateur ]
-    |  (fetch JSON / REST, assets statiques)
-    v
-[ Express (server.js) ] --(axios)--> [ Discogs API ]
-    |\
-    | \--(db.js: abstraction SQL)--> [ SQLite ]
-    |                                 [ Postgres ]
-    |--(logging)--> operation_logs (auditable)
-    |--(metrics)--> /api/status & /api/admin/system
+[ Client React (Vite) ] --(fetch JSON via api.ts)--> [ Express (server/index.js) ] --(axios)--> [ Discogs API ]
+                             |\
+                             | \--(server/db.js)--> [ SQLite ] / [ Postgres ]
+                             |--(logging)--> operation_logs
+                             |--(status/health)--> /api/status /api/admin/*
 ```
 
 ### Couches
@@ -293,7 +326,9 @@ Chaque mutation (albums, listes, items, tags, admin) génère une ligne dans `op
 
 ### Sécurité / Accès Admin
 
-Les endpoints `/api/admin/*` peuvent être protégés en définissant une variable d'environnement `ADMIN_TOKEN`. Le client inclut alors automatiquement l'en-tête `x-admin-token` s'il est stocké dans `localStorage` (clé `ml-admin-token`).
+Les endpoints `/api/admin/*` peuvent être protégés en définissant une variable d'environnement `ADMIN_TOKEN`.
+
+Intégration front : le helper `client/src/api.ts` ajoute automatiquement l'en-tête `x-admin-token` si `localStorage.ml-admin-token` est défini.
 
 Pour activer côté navigateur, exécuter dans la console :
 ```js
@@ -317,7 +352,7 @@ Deux approches :
    - `DISCOGS_TOKEN=<token>` (optionnel)
    - `ADMIN_TOKEN=<secret>` (fortement conseillé)
 4. Build command: `npm install`
-5. Start command: `node server.js`
+5. Start command: `node server/index.js`
 6. Déployer : le schéma est créé automatiquement.
 7. (Migration) Depuis l'ancienne instance: `GET /api/admin/export` puis `POST /api/admin/import` sur la nouvelle (remapping auto des IDs).
 
@@ -347,16 +382,28 @@ Le code active automatiquement `ssl: { rejectUnauthorized: false }` pour certain
 
 ### Améliorations possibles (TODO)
 
+### Centralisation des appels API (front)
+
+Le fichier `client/src/api.ts` fournit :
+
+- `apiFetch(path, init?)`
+- `postJson / putJson / patchJson / deleteReq`
+- Résolution `VITE_API_BASE` + ajout automatique du token admin.
+
+En cas d'erreur HTTP, une exception avec `error` (payload JSON) est levée.
+
+### Améliorations possibles (TODO)
+
 - Authentification plus avancée (RBAC, sessions)
-- Pagination / chargement progressif des logs
-- Index DB (année, positions) si croissance importante
+- Pagination / chargement progressif des logs & albums
+- Index DB supplémentaires (année, (list_id, position)) si croissance importante
 - Filtrage/tooltip interactif des charts
 - Sauvegarde préférences utilisateur (vue mosaïque, etc.)
 - Export partiel (sélection de listes seulement)
- - Endpoint de recherche/fusion d'albums en doublon
- - Rafraîchissement programmatique d'une liste entière (batch contrôlé)
- - Index supplémentaires si volume > 50k (année, (list_id, position))
- - Tests automatisés (actuellement absents)
+- Détection doublons potentiels (normalisation artiste + titre)
+- Rafraîchissement programmatique d'une liste entière (batch contrôlé)
+- Tests automatisés (unitaires + intégration)
+- Métriques Prometheus / endpoint `/api/admin/metrics`
 
 ## Contribution
 

@@ -2,10 +2,14 @@
   "name": "music-list",
   "version": "1.0.0",
   "description": "Application web pour gérer une collection de musique avec l'API Discogs",
-  "main": "server.js",
+  "main": "server/index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+  "start": "NODE_ENV=production node server/index.js",
+  "dev:api": "nodemon server/index.js",
+    "dev:full": "npm-run-all -p dev:api dev:client",
+    "dev:client": "cd client && vite",
+    "build:client": "cd client && vite build",
+    "preview:client": "cd client && vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -23,9 +27,24 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "pg": "^8.11.5",
-    "sqlite3": "^5.1.6"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+  "react-router-dom": "^6.23.0",
+    "sqlite3": "^5.1.6",
+    "swagger-ui-express": "^5.0.0",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@mui/icons-material": "^5.15.14",
+    "@mui/material": "^5.15.14",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+  "@vitejs/plugin-react": "^4.2.1",
+    "nodemon": "^3.0.1",
+    "typescript": "^5.4.5",
+    "vite": "^4.5.2",
+    "npm-run-all": "^4.1.5"
   }
 }
