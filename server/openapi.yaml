@@ -94,7 +94,7 @@ paths:
         - in: query
           name: q
           required: true
-          schema: { type: string }
+          schema: { type: string, description: "Texte (>=2 chars) pour artiste ou titre, ou année exacte sur 4 chiffres" }
       responses:
         '200': { description: OK }
   /api/lists:

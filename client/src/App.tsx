@@ -3,6 +3,7 @@ import { Box, Container, CircularProgress, Typography, GlobalStyles } from '@mui
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AlbumGrid from './components/AlbumGrid';
 import AddAlbumsPanel from './components/AddAlbumsPanel';
+import AlbumSearchBar from './components/AlbumSearchBar';
 import { apiFetch, patchJson, deleteReq } from './api';
 import { Snackbar, Alert } from '@mui/material';
 import Layout from './components/Layout';
@@ -19,6 +20,8 @@ const App: React.FC<AppProps> = ({ onToggleTheme, mode }) => {
   const [error, setError] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<any | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [searchActive, setSearchActive] = React.useState(false);
+  const [searchResults, setSearchResults] = React.useState<any[]|null>(null);
   const [snack, setSnack] = React.useState<{msg:string; severity:'success'|'error'}|null>(null);
 
   React.useEffect(() => {
@@ -66,9 +69,10 @@ const App: React.FC<AppProps> = ({ onToggleTheme, mode }) => {
                 .then(data => { setAlbums(data); setLoading(false); })
                 .catch(e => { setError(e.message || String(e)); setLoading(false); });
             }} />
+            <AlbumSearchBar onResults={(rows)=> { setSearchActive(true); setSearchResults(rows); }} onReset={()=> { setSearchActive(false); setSearchResults(null); }} />
             {loading && <Box sx={{ display:'flex', justifyContent:'center', mt:2 }}><CircularProgress size={28} /></Box>}
             {error && <Typography color="error" variant="body2">{error}</Typography>}
-            {albums && <AlbumGrid albums={albums} onSelect={setSelected} />}
+            { (searchActive ? searchResults : albums) && <AlbumGrid albums={(searchActive ? searchResults : albums) || []} onSelect={setSelected} />}
           </>} />
           <Route path="/lists" element={<ListsPage />} />
           <Route path="/smart-lists" element={<Navigate to="/lists" replace />} />

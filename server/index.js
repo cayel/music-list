@@ -337,8 +337,14 @@ app.get('/api/albums/search', (req, res) => {
     const q = (req.query.q || '').trim();
     if (q.length < 2) return res.json([]);
     const like = `%${q.replace(/%/g, '')}%`;
-    const sql = `SELECT id, release_id, artist_name, album_title, release_year, cover_image_url FROM albums WHERE artist_name LIKE ? OR album_title LIKE ? ORDER BY artist_name ASC, album_title ASC LIMIT 25`;
-    dbLayer.all(sql, [like, like], (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows));
+    const params = [like, like];
+    let sql = `SELECT id, master_id, release_id, artist_name, album_title, release_year, cover_image_url FROM albums WHERE (artist_name LIKE ? OR album_title LIKE ?`;
+    if (/^\d{4}$/.test(q)) { // année exacte
+        sql += ' OR release_year = ?';
+        params.push(parseInt(q,10));
+    }
+    sql += ') ORDER BY artist_name ASC, album_title ASC LIMIT 50';
+    dbLayer.all(sql, params, (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows));
 });
 
 app.post('/api/albums', async (req, res) => {
