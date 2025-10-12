@@ -1,5 +1,13 @@
 # Music List App
 
+<!-- Badges -->
+[![CI](https://github.com/cayel/music-list/actions/workflows/ci.yml/badge.svg)](https://github.com/cayel/music-list/actions/workflows/ci.yml)
+![Node Version](https://img.shields.io/badge/node-18.x-green?logo=node.js)
+[![API Render](https://img.shields.io/badge/API-Render-blueviolet?logo=render)](https://music-list-1.onrender.com/api/status)
+[![Front Vercel](https://img.shields.io/badge/Front-Vercel-black?logo=vercel)](https://music-list.vercel.app)
+![License](https://img.shields.io/badge/license-ISC-lightgrey)
+
+
 Application web légère pour gérer une collection d'albums avec intégration Discogs, listes classées, tags, statistiques visuelles et journal des opérations. Fonctionne en **SQLite (local / simple)** ou **Postgres (hébergement cloud sans disque persistant)** via une couche d'abstraction automatique.
 
 ## Fonctionnalités principales
