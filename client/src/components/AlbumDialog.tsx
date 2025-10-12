@@ -4,6 +4,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import LaunchIcon from '@mui/icons-material/Launch';
 
 interface Album {
   id: number;
@@ -29,23 +30,48 @@ const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, onDelet
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [anchorPlay, setAnchorPlay] = React.useState<null | HTMLElement>(null);
 
-  function openAppleMusicApp() {
-    if (!album) return;
-    const q = encodeURIComponent(`${album.artist_name} ${album.album_title}`);
-    // Stratégie : ouvrir directement la recherche Web (Apple Music Web)
-    // Sur macOS (Safari / Chrome avec Music installé), l'utilisateur peut cliquer "Ouvrir dans Musique".
-    // Les schémas non documentés (music:// / itmss://) sont peu fiables et bloqués par certains navigateurs.
-    const region = (navigator.language || 'en-US').split('-').pop() || 'US';
-    const webUrl = `https://music.apple.com/${region.toLowerCase()}/search?term=${q}`;
-    window.open(webUrl, '_blank', 'noopener');
-    setAnchorPlay(null);
-  }
-
   function openAppleMusicWeb() {
     if (!album) return;
     const q = encodeURIComponent(`${album.artist_name} ${album.album_title}`);
     const webUrl = `https://music.apple.com/search?term=${q}`;
     window.open(webUrl, '_blank', 'noopener');
+    setAnchorPlay(null);
+  }
+
+  function openAppleMusicNative() {
+    if (!album) return;
+    const qRaw = `${album.artist_name} ${album.album_title}`;
+    const q = encodeURIComponent(qRaw);
+    const region = (navigator.language || 'en-US').split('-').pop() || 'US';
+    const webUrl = `https://music.apple.com/${region.toLowerCase()}/search?term=${q}`;
+    // Schémas potentiels (non garantis) – on tente plusieurs
+    const candidates = [
+      `music://search?term=${q}`,
+      `music://search/${q}`,
+      `itmss://music.apple.com/search?term=${q}`
+    ];
+    const isMac = /mac/i.test(navigator.platform || navigator.userAgent);
+    if (!isMac) {
+      // Pas macOS → ouvrir simplement web
+      window.open(webUrl, '_blank', 'noopener');
+      setAnchorPlay(null); return;
+    }
+    let attempted = false;
+    const start = Date.now();
+    // Technique iframe caché pour déclencher schéma sans interrompre SPA
+    function tryNext(idx:number){
+      if (idx >= candidates.length) return;
+      const url = candidates[idx];
+      attempted = true;
+      const iframe = document.createElement('iframe');
+      iframe.style.display='none';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      setTimeout(()=>{ document.body.removeChild(iframe); if (Date.now()-start < 1200) tryNext(idx+1); }, 350);
+    }
+    tryNext(0);
+    // Fallback ouverture web après 1500ms si l'utilisateur n'a pas basculé (impossible de détecter succès programmatique de manière fiable)
+    setTimeout(()=>{ if (Date.now()-start >= 1400) window.open(webUrl, '_blank', 'noopener'); }, 1500);
     setAnchorPlay(null);
   }
 
@@ -107,13 +133,13 @@ const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, onDelet
           </Tooltip>
         </Box>
         <Menu anchorEl={anchorPlay} open={Boolean(anchorPlay)} onClose={()=> setAnchorPlay(null)} anchorOrigin={{ vertical:'top', horizontal:'left' }}>
-          <MenuItem onClick={openAppleMusicApp}>
-            <ListItemIcon><PlayArrowIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Ouvrir Apple Music" secondary="Onglet web (ouvrir l'app possible depuis la page)" />
+          <MenuItem onClick={openAppleMusicNative}>
+            <ListItemIcon><LaunchIcon fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Ouvrir (app native)" secondary="Tentative schéma + fallback web" />
           </MenuItem>
           <MenuItem onClick={openAppleMusicWeb}>
             <ListItemIcon><OpenInNewIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Recherche Web Apple Music" />
+            <ListItemText primary="Ouvrir (web)" />
           </MenuItem>
         </Menu>
         {onDelete && (
