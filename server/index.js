@@ -488,6 +488,14 @@ app.patch('/api/albums/:id/refresh', (req, res) => {
                     const rel = await fetchDiscogsRelease(data.main_release);
                     const lbl = extractUniqueLabelsFromRelease(rel);
                     if (lbl) mapped.label = lbl;
+                    // Mise à jour cover si (a) pas de cover master ou (b) image différente disponible côté release
+                    if (rel && Array.isArray(rel.images) && rel.images.length) {
+                        const primaryRel = rel.images.find(i=> i.type === 'primary') || rel.images[0];
+                        const relCover = primaryRel ? (primaryRel.uri || primaryRel.resource_url) : null;
+                        if (relCover && relCover !== mapped.cover_image_url) {
+                            mapped.cover_image_url = relCover;
+                        }
+                    }
                 } catch { /* ignore */ }
             }
             const updateSql = `UPDATE albums SET master_id=?, artist_id=?, artist_name=?, album_title=?, release_year=?, genre=?, style=?, label=?, cover_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`;
