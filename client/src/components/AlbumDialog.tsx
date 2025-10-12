@@ -1,7 +1,9 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, Stack, Chip, IconButton, Tooltip, Link } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, Stack, Chip, IconButton, Tooltip, Link, Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 interface Album {
   id: number;
@@ -25,6 +27,27 @@ const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, onDelet
   const genres = splitValues(album.genre);
   const styles = splitValues(album.style);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const [anchorPlay, setAnchorPlay] = React.useState<null | HTMLElement>(null);
+
+  function openAppleMusicApp() {
+    if (!album) return;
+    const q = encodeURIComponent(`${album.artist_name} ${album.album_title}`);
+    // Stratégie : ouvrir directement la recherche Web (Apple Music Web)
+    // Sur macOS (Safari / Chrome avec Music installé), l'utilisateur peut cliquer "Ouvrir dans Musique".
+    // Les schémas non documentés (music:// / itmss://) sont peu fiables et bloqués par certains navigateurs.
+    const region = (navigator.language || 'en-US').split('-').pop() || 'US';
+    const webUrl = `https://music.apple.com/${region.toLowerCase()}/search?term=${q}`;
+    window.open(webUrl, '_blank', 'noopener');
+    setAnchorPlay(null);
+  }
+
+  function openAppleMusicWeb() {
+    if (!album) return;
+    const q = encodeURIComponent(`${album.artist_name} ${album.album_title}`);
+    const webUrl = `https://music.apple.com/search?term=${q}`;
+    window.open(webUrl, '_blank', 'noopener');
+    setAnchorPlay(null);
+  }
 
   async function handleRefresh() {
     if (onRefresh && album) await onRefresh(album.id);
@@ -78,6 +101,21 @@ const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, onDelet
         </Stack>
       </DialogContent>
       <DialogActions>
+        <Box sx={{ flexGrow:1, display:'flex', gap:1 }}>
+          <Tooltip title="Écouter dans Apple Music">
+            <Button startIcon={<PlayArrowIcon />} onClick={(e)=> setAnchorPlay(e.currentTarget)} variant="outlined" color="primary" size="small">Écouter</Button>
+          </Tooltip>
+        </Box>
+        <Menu anchorEl={anchorPlay} open={Boolean(anchorPlay)} onClose={()=> setAnchorPlay(null)} anchorOrigin={{ vertical:'top', horizontal:'left' }}>
+          <MenuItem onClick={openAppleMusicApp}>
+            <ListItemIcon><PlayArrowIcon fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Ouvrir Apple Music" secondary="Onglet web (ouvrir l'app possible depuis la page)" />
+          </MenuItem>
+          <MenuItem onClick={openAppleMusicWeb}>
+            <ListItemIcon><OpenInNewIcon fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Recherche Web Apple Music" />
+          </MenuItem>
+        </Menu>
         {onDelete && (
           <Button color={confirmingDelete? 'error':'inherit'} onClick={handleDelete} disabled={refreshing}
             variant={confirmingDelete? 'contained':'text'}>
