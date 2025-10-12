@@ -137,6 +137,23 @@ async function fetchDiscogsRelease(releaseId) {
     return r.data;
 }
 
+// Recherche master Discogs par artiste + titre
+async function searchDiscogsMasterByArtistTitle(artist, title) {
+    const headers = { 'User-Agent': USER_AGENT };
+    if (DISCOGS_TOKEN) headers['Authorization'] = `Discogs token=${DISCOGS_TOKEN}`;
+    const params = new URLSearchParams();
+    if (artist) params.set('artist', artist);
+    if (title) params.set('release_title', title);
+    params.set('type', 'master');
+    params.set('per_page', '5');
+    const url = `https://api.discogs.com/database/search?${params.toString()}`;
+    const r = await axios.get(url, { headers });
+    const results = (r.data?.results || []).filter(x => x.type === 'master');
+    const norm = s => (s || '').toString().trim().toLowerCase();
+    const exact = results.filter(x => norm(x.title).includes(norm(title)) && (!artist || norm(x.artist) === norm(artist)));
+    return { results, exact };
+}
+
 function extractUniqueLabelsFromRelease(releaseData) {
     if (!releaseData || !Array.isArray(releaseData.labels)) return null;
     const seen = new Set();
@@ -353,6 +370,67 @@ app.post('/api/albums', async (req, res) => {
         if (e.response && e.response.status === 404) return res.status(404).json({ error: 'Master non trouvé' });
         res.status(500).json({ error: 'Erreur Discogs' });
     }
+});
+
+// Ajout via artiste + titre
+app.post('/api/albums/by-artist-title', async (req, res) => {
+    const { artist, title, pickFirst } = req.body || {};
+    if (!artist || !title) return res.status(400).json({ error: 'artist et title requis' });
+    try {
+        const { results, exact } = await searchDiscogsMasterByArtistTitle(artist, title);
+        const candidates = exact.length ? exact : results;
+        if (!candidates.length) return res.status(404).json({ error: 'Aucun master trouvé' });
+        let chosen = null;
+        if (candidates.length === 1) chosen = candidates[0];
+        else if (pickFirst) chosen = candidates[0];
+        else return res.status(409).json({ error: 'Ambigu', candidates: candidates.slice(0,5).map(c => ({ id: c.id, title: c.title, year: c.year })) });
+        try {
+            const albumId = await ensureAlbumByMaster(chosen.id);
+            logOperation('album.add', 'album', albumId, { via: 'artistTitle', master_id: chosen.id });
+            return res.json({ message: 'Album ajouté', albumId, master_id: chosen.id, via: 'artistTitle' });
+        } catch (e) {
+            if (e.message && /UNIQUE/i.test(e.message)) return res.status(409).json({ error: 'Album déjà présent' });
+            throw e;
+        }
+    } catch (e) {
+        console.error('Erreur ajout via artiste+titre', e.message);
+        res.status(500).json({ error: 'Erreur Discogs recherche' });
+    }
+});
+
+// Ajout en masse multi-lignes
+app.post('/api/albums/bulk', async (req, res) => {
+    const { lines, dryRun, pickFirst } = req.body || {};
+    if (typeof lines !== 'string' || !lines.trim()) return res.status(400).json({ error: 'lines (string) requis' });
+    const rawLines = lines.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const out = { total: rawLines.length, processed: 0, added: [], duplicates: [], ambiguous: [], notFound: [], errors: [] };
+    for (const line of rawLines) {
+        if (out.processed >= 200) { out.errors.push({ line, error: 'Limite 200 atteinte' }); continue; }
+        out.processed++;
+        let artist = null, title = null;
+        if (line.includes(',')) [artist, title] = line.split(',');
+        else if (line.includes(' - ')) [artist, title] = line.split(' - ');
+        if (!artist || !title) { out.errors.push({ line, error: 'Format invalide' }); continue; }
+        artist = artist.trim(); title = title.trim();
+        try {
+            const { results, exact } = await searchDiscogsMasterByArtistTitle(artist, title);
+            const candidates = exact.length ? exact : results;
+            if (!candidates.length) { out.notFound.push({ line, artist, title }); continue; }
+            let chosen = null;
+            if (candidates.length === 1) chosen = candidates[0];
+            else if (pickFirst) chosen = candidates[0];
+            else { out.ambiguous.push({ line, artist, title, candidates: candidates.slice(0,5).map(c => ({ id: c.id, title: c.title, year: c.year })) }); continue; }
+            if (dryRun) { out.added.push({ line, master_id: chosen.id, dryRun: true }); continue; }
+            const existing = await new Promise(resolve => dbLayer.get('SELECT id FROM albums WHERE master_id=?', [chosen.id], (err, row) => resolve(row && row.id)));
+            if (existing) { out.duplicates.push({ line, master_id: chosen.id, album_id: existing }); continue; }
+            const albumId = await ensureAlbumByMaster(chosen.id);
+            out.added.push({ line, master_id: chosen.id, album_id: albumId });
+        } catch (e) {
+            out.errors.push({ line, error: e.message || 'Erreur inconnue' });
+        }
+    }
+    logOperation('album.bulk', 'album', null, { added: out.added.length, duplicates: out.duplicates.length, ambiguous: out.ambiguous.length, notFound: out.notFound.length });
+    res.json(out);
 });
 
 app.delete('/api/albums/:id', (req, res) => {

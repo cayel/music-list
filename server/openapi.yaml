@@ -32,6 +32,40 @@ paths:
       responses:
         '200': { description: Album ajouté }
         '409': { description: Doublon }
+  /api/albums/by-artist-title:
+    post:
+      summary: Ajoute un album via artiste + titre (résolution master Discogs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ artist, title ]
+              properties:
+                artist: { type: string }
+                title: { type: string }
+                pickFirst: { type: boolean, description: "Si vrai sélectionne le 1er résultat même si plusieurs" }
+      responses:
+        '200': { description: Ajouté }
+        '404': { description: Aucun master trouvé }
+        '409': { description: Ambigu (candidats listés) }
+  /api/albums/bulk:
+    post:
+      summary: Ajout en masse d'albums (lignes `Artiste,Titre` ou `Artiste - Titre`)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ lines ]
+              properties:
+                lines: { type: string, description: "Texte multi-lignes" }
+                dryRun: { type: boolean }
+                pickFirst: { type: boolean }
+      responses:
+        '200': { description: Résultats agrégés (added/duplicates/ambiguous/notFound/errors) }
   /api/albums/{id}:
     delete:
       summary: Supprime un album (si non utilisé)

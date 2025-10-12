@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Container, CircularProgress, Typography, GlobalStyles } from '@mui/material';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AlbumGrid from './components/AlbumGrid';
+import AddAlbumsPanel from './components/AddAlbumsPanel';
 import { apiFetch, patchJson } from './api';
 import Layout from './components/Layout';
 import AlbumDialog from './components/AlbumDialog';
@@ -45,7 +46,13 @@ const App: React.FC<AppProps> = ({ onToggleTheme, mode }) => {
         <Routes>
           <Route path="/" element={<Navigate to="/albums" replace />} />
           <Route path="/albums" element={<>
-            {loading && <Box sx={{ display:'flex', justifyContent:'center', mt:6 }}><CircularProgress /></Box>}
+            <AddAlbumsPanel onAdded={() => {
+              setLoading(true);
+              apiFetch('/api/albums')
+                .then(data => { setAlbums(data); setLoading(false); })
+                .catch(e => { setError(e.message || String(e)); setLoading(false); });
+            }} />
+            {loading && <Box sx={{ display:'flex', justifyContent:'center', mt:2 }}><CircularProgress size={28} /></Box>}
             {error && <Typography color="error" variant="body2">{error}</Typography>}
             {albums && <AlbumGrid albums={albums} onSelect={setSelected} />}
           </>} />

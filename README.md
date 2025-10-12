@@ -12,7 +12,7 @@ Application web légère pour gérer une collection d'albums avec intégration D
 
 ## Fonctionnalités principales
 
-- 🎵 Ajout d'albums par identifiant master Discogs (champ master_id unique)
+- 🎵 Ajout d'albums (3 méthodes) : masterId Discogs, artiste+titre (résolution automatique), import bulk multi-lignes
 - 🔄 Rafraîchissement ciblé des métadonnées d'un album depuis Discogs (via master + main_release pour labels)
 - 📚 Grille mosaïque responsive (filtre texte + année exacte) + vue compacte
 - 🧾 Listes classées avec réordonnancement par glisser-déposer (algorithmes adaptés SQLite / Postgres)
@@ -29,7 +29,7 @@ Application web légère pour gérer une collection d'albums avec intégration D
 - 🏷️ Badges d'environnement & version (package.json + hash git courts) en header / footer
 - 🎨 Thème clair/sombre acier/bleu
 
-Fonctionnalités retirées / non présentes volontairement : ajout par artiste+titre, ajout direct par numéro de release, bouton copier release ID, section outils de recherche Discogs, endpoint de rafraîchissement global massif, pagination, outil de migration (devenu inutile après adoption totale de master_id).
+Fonctionnalités retirées / non présentes volontairement : ajout direct par numéro de release, bouton copier release ID, section outils de recherche Discogs, endpoint de rafraîchissement global massif, pagination, outil de migration (devenu inutile après adoption totale de master_id).
 
 ## Données persistées
 
@@ -128,17 +128,19 @@ L'API accepte donc un sous-ensemble d'IDs; les éléments omis conservent leur o
 
 ## Mode d'emploi rapide
 
-1. Trouver l'identifiant master Discogs (ex: URL `.../master/249504` ⇒ `249504`).
-2. Saisir cet identifiant dans le formulaire (champ masterId) et valider.
-3. Filtrer / rechercher via la barre (texte + année exacte).
-4. Passer en onglet Listes : créer une liste, ajouter des albums (auto-complétion locale ou releaseId), activer le mode édition pour réordonner.
-5. Ajouter des tags de liste pour le regroupement (affichage badge + stats de tags).
-6. Clic pochette ➜ modal détail + lien Discogs master.
+1. Ajouter des albums (onglet Albums -> panneau) :
+   - Master ID : coller l'identifiant master Discogs (URL `.../master/249504` ⇒ `249504`).
+   - Artiste + Titre : recherche Discogs; s'il y a plusieurs résultats, soit sélection manuelle (erreur 409 avec liste), soit option "1er si ambigu".
+   - Bulk : coller plusieurs lignes `Artiste,Titre` ou `Artiste - Titre` (option dry-run pour simuler sans insérer).
+2. Filtrer / rechercher via la barre (texte + année exacte).
+3. Passer en onglet Listes : créer une liste, ajouter des albums (auto-complétion locale ou masterId), activer le mode édition pour réordonner.
+4. Ajouter des tags de liste pour le regroupement (affichage badge + stats de tags).
+5. Clic pochette ➜ modal détail + lien Discogs master.
    - Zoom : clic sur l'image agrandit / réduit (classe CSS `.zoomed`).
    - Visualisation des IDs : master_id (cliquable vers Discogs) et artist_id.
    - Lien direct Discogs master (nouvel onglet).
-7. Onglet Statistiques ➜ visualiser graphiques (années, genres/styles) calculés côté client.
-8. Onglet Administration ➜ exporter/importer JSON, vérifier ou reconstruire la base, consulter le journal.
+6. Onglet Statistiques ➜ visualiser graphiques (années, genres/styles) calculés côté client.
+7. Onglet Administration ➜ exporter/importer JSON, vérifier ou reconstruire la base, consulter le journal.
 
 ## Scripts
 
@@ -333,6 +335,8 @@ Idées : compteur d'erreurs agrégé, histogramme latences (wrap `db.run`), endp
 Albums
 - `GET /api/albums` – liste + usage counts (renvoie master_id)
 - `POST /api/albums` – ajout `{ masterId }`
+- `POST /api/albums/by-artist-title` – ajout par (artiste + titre) avec résolution Discogs (409 si ambigu)
+- `POST /api/albums/bulk` – import multi-lignes, paramètres: `lines`, `dryRun?`, `pickFirst?`
 - `DELETE /api/albums/:id` – suppression conditionnelle
 - `PATCH /api/albums/:id/refresh` – rafraîchit les métadonnées via master
 - `GET /api/albums/search?q=...` – recherche locale (auto-complétion)
@@ -361,7 +365,7 @@ Administration / Base
 - `POST /api/admin/import` – import JSON (transactionnel)
 - `GET /api/admin/logs?limit=N` – journal des opérations
 
-Remarque : endpoints supprimés / non implémentés volontairement (`/api/albums/by-artist-title`, `/api/albums/refresh-all`, `/api/discogs/search`, `/api/admin/migrate/masters`).
+Remarque : endpoints supprimés / non implémentés volontairement (`/api/albums/refresh-all`, `/api/discogs/search`, `/api/admin/migrate/masters`).
 
 ### Note historique
 Une ancienne phase de migration interne (release_id → master_id) a existé puis a été supprimée. Tout le code associé (endpoint, badges, UI) a été retiré après finalisation : la collection est désormais exclusivement adressée par `master_id`.
