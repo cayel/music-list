@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <title>Base Musicale (MUI)</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link id="favicon" rel="icon" type="image/svg+xml" href="/favicon-prod.svg" />
   </head>
   <body>
     <div id="root"></div>
@@ -16,6 +17,14 @@
       };
       // eslint-disable-next-line no-console
       console.log('[config] API_BASE =', window.__APP_CONFIG__.API_BASE || '(same-origin)');
+
+      // Détection environnement local : hostname localhost/127 ou port non standard
+      const isLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
+      const fav = document.getElementById('favicon');
+      if (fav) {
+        fav.href = isLocal ? '/favicon-dev.svg' : '/favicon-prod.svg';
+      }
+      if (isLocal) document.title = '🎧 (DEV) ' + document.title.replace(/^🎧\s*\(DEV\)\s*/,'');
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

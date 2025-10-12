@@ -28,6 +28,7 @@ Application web légère pour gérer une collection d'albums avec intégration D
 - 🔐 Protection optionnelle des endpoints admin par jeton
 - 🏷️ Badges d'environnement & version (package.json + hash git courts) en header / footer
 - 🎨 Thème clair/sombre acier/bleu
+- 🖼️ Favicon dynamique (bleu production / rouge DEV automatique)
 
 Fonctionnalités retirées / non présentes volontairement : ajout direct par numéro de release, bouton copier release ID, section outils de recherche Discogs, endpoint de rafraîchissement global massif, pagination, outil de migration (devenu inutile après adoption totale de master_id).
 
