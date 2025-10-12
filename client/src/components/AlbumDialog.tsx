@@ -16,17 +16,25 @@ interface Album {
   master_id?: number | null;
 }
 
-interface Props { open: boolean; album: Album | null; onClose: () => void; onRefresh?: (id: number)=>Promise<void>; refreshing?: boolean; }
+interface Props { open: boolean; album: Album | null; onClose: () => void; onRefresh?: (id: number)=>Promise<void>; onDelete?: (id:number)=>Promise<void>; refreshing?: boolean; }
 
 const splitValues = (v?: string | null) => v ? v.split(/\s*,\s*/).filter(Boolean) : [];
 
-const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, refreshing }) => {
+const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, onDelete, refreshing }) => {
   if (!album) return null;
   const genres = splitValues(album.genre);
   const styles = splitValues(album.style);
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
 
   async function handleRefresh() {
     if (onRefresh && album) await onRefresh(album.id);
+  }
+
+  async function handleDelete() {
+    if (!onDelete || !album) return;
+    if (!confirmingDelete) { setConfirmingDelete(true); return; }
+    await onDelete(album.id);
+    setConfirmingDelete(false);
   }
 
   return (
@@ -70,6 +78,12 @@ const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, refresh
         </Stack>
       </DialogContent>
       <DialogActions>
+        {onDelete && (
+          <Button color={confirmingDelete? 'error':'inherit'} onClick={handleDelete} disabled={refreshing}
+            variant={confirmingDelete? 'contained':'text'}>
+            {confirmingDelete? 'Confirmer suppression':'Supprimer'}
+          </Button>
+        )}
         <Button onClick={onClose}>Fermer</Button>
       </DialogActions>
     </Dialog>

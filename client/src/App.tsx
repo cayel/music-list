@@ -3,7 +3,8 @@ import { Box, Container, CircularProgress, Typography, GlobalStyles } from '@mui
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AlbumGrid from './components/AlbumGrid';
 import AddAlbumsPanel from './components/AddAlbumsPanel';
-import { apiFetch, patchJson } from './api';
+import { apiFetch, patchJson, deleteReq } from './api';
+import { Snackbar, Alert } from '@mui/material';
 import Layout from './components/Layout';
 import AlbumDialog from './components/AlbumDialog';
 import ListsPage from './pages/ListsPage';
@@ -18,6 +19,7 @@ const App: React.FC<AppProps> = ({ onToggleTheme, mode }) => {
   const [error, setError] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<any | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [snack, setSnack] = React.useState<{msg:string; severity:'success'|'error'}|null>(null);
 
   React.useEffect(() => {
     setLoading(true);
@@ -38,6 +40,17 @@ const App: React.FC<AppProps> = ({ onToggleTheme, mode }) => {
       console.error(e);
       setError(e.message);
     } finally { setRefreshing(false); }
+  }
+
+  async function deleteAlbum(id:number){
+    try {
+      await deleteReq(`/api/albums/${id}`);
+      setAlbums(albs => albs ? albs.filter(a => a.id !== id) : albs);
+      setSelected(null);
+      setSnack({ msg:'Album supprimé', severity:'success' });
+    } catch(e:any){
+      setSnack({ msg: e.message || 'Erreur suppression', severity:'error' });
+    }
   }
 
   return (
@@ -63,7 +76,11 @@ const App: React.FC<AppProps> = ({ onToggleTheme, mode }) => {
             <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </Container>
-      <AlbumDialog open={!!selected} album={selected} onClose={()=> setSelected(null)} onRefresh={refreshAlbum} refreshing={refreshing} />
+      <AlbumDialog open={!!selected} album={selected} onClose={()=> setSelected(null)} onRefresh={refreshAlbum} onDelete={deleteAlbum} refreshing={refreshing} />
+      <Snackbar open={!!snack} autoHideDuration={3500} onClose={()=> setSnack(null)} anchorOrigin={{ vertical:'bottom', horizontal:'center' }}
+        message={snack ? snack.msg : undefined}
+        children={snack ? <Alert onClose={()=> setSnack(null)} severity={snack.severity} variant="filled">{snack.msg}</Alert> : undefined}
+      />
     </Layout>
   );
 };
