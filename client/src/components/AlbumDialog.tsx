@@ -1,5 +1,6 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, Stack, Chip, IconButton, Tooltip } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, Stack, Chip, IconButton, Tooltip, Link } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 interface Album {
@@ -54,6 +55,17 @@ const AlbumDialog: React.FC<Props> = ({ open, album, onClose, onRefresh, refresh
               </Stack>
             </Box>}
             {typeof album.list_usage_count === 'number' && <Typography variant="caption" color="text.secondary">Présent dans {album.list_usage_count} liste(s)</Typography>}
+            {album.master_id && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt:0.5 }}>
+                <Typography variant="caption" color="text.secondary">Master ID:&nbsp;<strong>{album.master_id}</strong></Typography>
+                <Tooltip title="Copier l'ID">
+                  <IconButton size="small" onClick={()=> navigator.clipboard.writeText(String(album.master_id))}>
+                    <ContentCopyIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
+                <Link href={`https://www.discogs.com/master/${album.master_id}`} target="_blank" rel="noopener noreferrer" underline="hover" variant="caption">Discogs ↗</Link>
+              </Stack>
+            )}
           </Stack>
         </Stack>
       </DialogContent>
