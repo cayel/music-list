@@ -248,6 +248,44 @@ Chaque mutation écrit une ligne contextualisée (info JSON compacte). Permet au
 
 ### Sécurité
 - Admin protégés via header `x-admin-token` si `ADMIN_TOKEN` défini.
+
+### Endpoints Admin (rappel)
+
+| Méthode | URL | Description | Notes |
+|---------|-----|-------------|-------|
+| GET | /api/admin/health | Présence tables + counts | Vérifie existence et compte chaque table principale |
+| GET | /api/admin/system | Métriques process + version + hash git + taille DB | Taille DB (SQLite fichier, Postgres pas encore détaillée) |
+| GET | /api/admin/logs?limit=N | Logs récents (ordre décroissant) | `limit` par défaut 100, max 500 |
+| GET | /api/admin/export | Export JSON complet (toutes tables) | À protéger — contient potentiellement beaucoup de données |
+| POST | /api/admin/import | Import JSON (albums, lists, items, tags, smart_lists) | Remapping + dédup master_id / release_id |
+| POST | /api/admin/rebuild | (Re)création / ajout colonnes manquantes | Relance init schéma |
+
+Quand `ADMIN_TOKEN` est défini, ajouter le header :
+
+```
+curl -H "x-admin-token: $ADMIN_TOKEN" http://localhost:3000/api/admin/health
+```
+
+Exemples rapides :
+
+```
+# Export
+curl -H "x-admin-token: $ADMIN_TOKEN" http://localhost:3000/api/admin/export -o export.json
+
+# Import
+curl -H "x-admin-token: $ADMIN_TOKEN" -X POST -H 'Content-Type: application/json' --data @export.json http://localhost:3000/api/admin/import
+
+# Logs (200 derniers)
+curl -H "x-admin-token: $ADMIN_TOKEN" 'http://localhost:3000/api/admin/logs?limit=200'
+```
+
+Structure simplifiée de quelques objets renvoyés :
+
+```
+Health: { ok:boolean, tables:{albums:boolean,...}, counts:{albums:number,...}, timestamp }
+System: { process:{pid,memory,uptime,node}, environment, app:{version,git}, db:{driver,sizeBytes?}, counts }
+Log: { id, action, entity_type, entity_id, info, created_at }
+```
 - Pas d'auth utilisateur finale (use-case collection personnelle). Extension possible : ajouter table `users` + scope tokens.
 
 ### Version & Environnement
