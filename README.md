@@ -14,7 +14,7 @@ Application web légère pour gérer une collection d'albums avec intégration D
 
 - 🎵 Ajout d'albums (3 méthodes) : masterId Discogs, artiste+titre (résolution automatique), import bulk multi-lignes
 - 🔄 Rafraîchissement ciblé des métadonnées d'un album depuis Discogs (via master + main_release pour labels)
-- 📚 Grille mosaïque responsive (filtre texte + année exacte) + vue compacte
+- 📚 Grille mosaïque responsive (recherche locale artiste / titre / année exacte) + vue compacte
 - 🧾 Listes classées avec réordonnancement par glisser-déposer (algorithmes adaptés SQLite / Postgres)
 - 🤖 Listes intelligentes dynamiques (critères genres/styles IN/OUT, années min/max, limite) recalculées à l'ouverture
 - 🏷️ Tags de listes (ajout / suppression) + compteur d'utilisation consolidé
@@ -339,7 +339,7 @@ Albums
 - `POST /api/albums/bulk` – import multi-lignes, paramètres: `lines`, `dryRun?`, `pickFirst?`
 - `DELETE /api/albums/:id` – suppression conditionnelle
 - `PATCH /api/albums/:id/refresh` – rafraîchit les métadonnées via master
-- `GET /api/albums/search?q=...` – recherche locale (auto-complétion)
+- `GET /api/albums/search?q=...` – recherche locale (artiste, titre ou année exacte AAAA, limite 50)
 
 Listes
 - `GET /api/lists` – listes + tags + compte items

@@ -144,7 +144,7 @@ La spécification est définie dans `server/openapi.yaml` et chargée au démarr
 | POST | /api/albums | Ajout via `masterId` |
 | DELETE | /api/albums/:id | Suppression (refus si utilisé) |
 | PATCH | /api/albums/:id/refresh | Rafraîchit métadonnées Discogs |
-| GET | /api/albums/search?q= | Recherche (artist/album) |
+| GET | /api/albums/search?q= | Recherche (artiste, titre ou année exacte AAAA) |
 
 ### Listes classées
 | Méthode | URL | Description |
