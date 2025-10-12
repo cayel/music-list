@@ -9,8 +9,21 @@ interface ImportMeta { env: ImportMetaEnv }
 
 // Typage souple pour éviter conflits : Vite fournit import.meta.env à l'exécution
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Lecture runtime optionnelle (injection future via window.__APP_CONFIG__)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const runtimeBase = (typeof window !== 'undefined' && (window as any).__APP_CONFIG__?.API_BASE) ? (window as any).__APP_CONFIG__.API_BASE as string : undefined;
 const baseEnv = (import.meta as any)?.env?.VITE_API_BASE as string | undefined;
-const base = baseEnv ? baseEnv.replace(/\/$/,'') : '';
+const base = (runtimeBase || baseEnv || '').replace(/\/$/,'');
+
+if (typeof window !== 'undefined') {
+  if (!base) {
+    // eslint-disable-next-line no-console
+    console.warn('[api] Aucune base API définie: appels envoyés en same-origin. Définissez VITE_API_BASE ou ?api=');
+  } else {
+    // eslint-disable-next-line no-console
+    console.debug('[api] Base API utilisée =', base, '(runtime=', runtimeBase || 'none', 'env=', baseEnv || 'none', ')');
+  }
+}
 
 export function apiUrl(path: string){
   if (path.startsWith('http')) return path;

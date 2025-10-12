@@ -8,6 +8,7 @@
   "dev:api": "nodemon server/index.js",
     "dev:full": "npm-run-all -p dev:api dev:client",
     "dev:client": "cd client && vite",
+  "dev:client:remote": "cd client && VITE_API_BASE=https://music-list-1.onrender.com vite",
     "build:client": "cd client && vite build",
     "preview:client": "cd client && vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"

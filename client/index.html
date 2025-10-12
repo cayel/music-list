@@ -7,6 +7,16 @@
   </head>
   <body>
     <div id="root"></div>
+    <script type="module">
+      // Injection de la base API (debug + runtime override possible)
+      const queryApi = new URLSearchParams(window.location.search).get('api');
+      const envApi = import.meta.env?.VITE_API_BASE || null;
+      window.__APP_CONFIG__ = {
+        API_BASE: queryApi || envApi || null
+      };
+      // eslint-disable-next-line no-console
+      console.log('[config] API_BASE =', window.__APP_CONFIG__.API_BASE || '(same-origin)');
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

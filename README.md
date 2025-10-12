@@ -191,7 +191,7 @@ Legacy retiré : `public/script.js`, `public/styles.css`, anciens `server.js` & 
 
 ### Couches
 - Présentation : fichiers statiques dans `public/` servis par Express.
-- API REST : routes définies dans `server.js` (albums, listes, tags, admin, système).
+- API REST : routes définies dans `server/index.js` (albums, listes, smart lists, tags, admin, système) ou via modules `server/routes/*`.
 - Accès Données : module `db.js` unifie SQLite / Postgres (conversion placeholders `?` → `$n`, création schéma, helpers `run/get/all`).
 - Intégration Externe : Discogs via `axios` (ajout / rafraîchissement d'albums). Cache côté DB uniquement (pas de layer mémoire pour rester stateless).
 - Journal & Observabilité : table `operation_logs`, endpoints `/api/status`, `/api/admin/health`, `/api/admin/system`.
