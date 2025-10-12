@@ -449,12 +449,39 @@ app.delete('/api/albums/:id', (req, res) => {
 
 app.patch('/api/albums/:id/refresh', (req, res) => {
     const { id } = req.params;
+    const { rederiveMaster } = req.body || {};
     dbLayer.get('SELECT * FROM albums WHERE id = ?', [id], async (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Album non trouvé' });
         try {
-            if (!row.master_id) return res.status(400).json({ error: 'master_id absent pour cet album' });
-            const data = await fetchDiscogsMaster(row.master_id);
+            let masterId = row.master_id;
+            let masterChanged = false;
+            // Si master_id manquant ou rederiveMaster demandé, tenter de le récupérer
+            if (!masterId || rederiveMaster) {
+                let candidate = null;
+                // 1. Si release_id présent, on tente depuis la release
+                if (row.release_id) {
+                    try {
+                        const rel = await fetchDiscogsRelease(row.release_id);
+                        if (rel && rel.master_id) candidate = rel.master_id;
+                    } catch {/* ignore */}
+                }
+                // 2. Recherche par artiste + titre si toujours rien
+                if (!candidate && row.artist_name && row.album_title) {
+                    try {
+                        const { results, exact } = await searchDiscogsMasterByArtistTitle(row.artist_name, row.album_title);
+                        const pick = (exact && exact.length) ? exact[0] : (results && results.length ? results[0] : null);
+                        if (pick) candidate = pick.id;
+                    } catch {/* ignore */}
+                }
+                if (candidate && candidate !== masterId) {
+                    masterId = candidate;
+                    masterChanged = true;
+                }
+                if (!masterId) return res.status(400).json({ error: 'Impossible de déterminer master_id' });
+            }
+            // Récupération données master
+            const data = await fetchDiscogsMaster(masterId);
             const mapped = mapMasterData(data);
             if (data.main_release) {
                 try {
@@ -463,19 +490,20 @@ app.patch('/api/albums/:id/refresh', (req, res) => {
                     if (lbl) mapped.label = lbl;
                 } catch { /* ignore */ }
             }
-            dbLayer.run(`UPDATE albums SET artist_id=?, artist_name=?, album_title=?, release_year=?, genre=?, style=?, label=?, cover_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-                [mapped.artist_id, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url, id],
+            const updateSql = `UPDATE albums SET master_id=?, artist_id=?, artist_name=?, album_title=?, release_year=?, genre=?, style=?, label=?, cover_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`;
+            dbLayer.run(updateSql,
+                [masterId, mapped.artist_id, mapped.artist_name, mapped.album_title, mapped.release_year, mapped.genre, mapped.style, mapped.label, mapped.cover_image_url, id],
                 function (uErr) {
                     if (uErr) return res.status(500).json({ error: uErr.message });
                     dbLayer.get('SELECT * FROM albums WHERE id = ?', [id], (gErr, updated) => {
                         if (gErr) return res.status(500).json({ error: gErr.message });
-                        logOperation('album.refresh', 'album', id, { master_id: row.master_id });
-                        res.json({ message: 'Album rafraîchi', album: updated });
+                        logOperation('album.refresh', 'album', id, { prev_master: row.master_id, new_master: masterId, changed: masterChanged });
+                        res.json({ message: 'Album rafraîchi', album: updated, master_id_changed: masterChanged });
                     });
                 }
             );
         } catch (e) {
-            if (e.response && e.response.status === 404) return res.status(404).json({ error: 'Release non trouvée' });
+            if (e.response && e.response.status === 404) return res.status(404).json({ error: 'Master non trouvé' });
             res.status(500).json({ error: 'Erreur lors du rafraîchissement' });
         }
     });

@@ -29,8 +29,9 @@ const App: React.FC<AppProps> = ({ onToggleTheme, mode }) => {
   async function refreshAlbum(id: number) {
     try {
       setRefreshing(true);
-  const data = await patchJson(`/api/albums/${id}/refresh`);
-      // Mettre à jour la liste locale
+      const target = albums?.find(a => a.id === id);
+      const body = (target && !target.master_id) ? { rederiveMaster: true } : undefined;
+      const data = await patchJson(`/api/albums/${id}/refresh`, body);
       setAlbums(albs => albs ? albs.map(a => a.id === id ? data.album : a) : albs);
       setSelected(data.album);
     } catch(e:any) {
