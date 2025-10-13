@@ -8,8 +8,22 @@ module.exports = (app, logOperation) => {
       const sql = `SELECT * FROM albums WHERE lower(artist_name) LIKE ?`;
       const rows = await new Promise((resolve,reject)=> db.all(sql,[like], (err,r)=> err? reject(err): resolve(r||[])));
       if(!rows.length) return res.status(404).json({ error:'Aucun album local pour cet artiste' });
-      const deny=/(live|remix|remastered|reissue|compilation|best\s*of|greatest|mix|dj\s*mix|single|ep|promo|anthology|collection)/i;
-      const filtered = rows.filter(r=> !deny.test(r.album_title||''));
+      function isExcluded(title){
+        if(!title) return false;
+        const lc=title.toLowerCase();
+        const normalized = lc.replace(/[^a-z0-9]+/g,' ').trim();
+        if(!normalized) return false;
+        const tokens = normalized.split(/\s+/);
+        const tokenSet = new Set(tokens);
+        // Phrases multi-mots
+        const phraseList = ['best of','dj mix'];
+        if (phraseList.some(p => normalized.includes(p))) return true;
+        // Tokens simples
+        const simple = ['live','remix','remastered','reissue','compilation','greatest','mix','single','ep','promo','anthology','collection'];
+        if (simple.some(t => tokenSet.has(t))) return true;
+        return false;
+      }
+      const filtered = rows.filter(r=> !isExcluded(r.album_title||''));
       if(!filtered.length) return res.status(404).json({ error:'Albums trouvés mais aucun ne passe le filtre studio' });
       filtered.sort((a,b)=>{ if(a.release_year && b.release_year && a.release_year!==b.release_year) return a.release_year-b.release_year; if(a.release_year && !b.release_year) return -1; if(!a.release_year && b.release_year) return 1; return (a.album_title||'').localeCompare(b.album_title||'','fr'); });
       const listName=`Album Studio ${artistName}`; const listDescription=`Discographie ${artistName} - Albums Studio`;
