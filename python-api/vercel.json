@@ -1,12 +1,5 @@
 {
-  "buildCommand": "pip install -r python-api/requirements.txt",
-  "installCommand": "pip install -r python-api/requirements.txt",
-  "ignoreCommand": "echo ignore",
-  "framework": null,
-  "pythonVersion": "3.12",
-  "devCommand": "uvicorn python-api.app.main:app --host 0.0.0.0 --port 8000",
-  "functions": {
-    "api/index.py": {
-      "runtime": "python3.12"}
-  }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
 }

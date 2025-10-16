@@ -1,5 +1,11 @@
-from app.main import app  # import du FastAPI app défini dans python-api/app/main.py
+from flask import Flask
 
-# Pour Vercel (runtime Python), l'objet ASGI peut être exposé sous le nom 'app' ou 'handler'.
-# On fournit les deux pour compatibilité.
-handler = app
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return 'Hello, World!'
+
+@app.route('/about')
+def about():
+    return 'About'
