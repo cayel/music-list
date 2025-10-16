@@ -10,6 +10,42 @@
 
 Application web légère pour gérer une collection d'albums avec intégration Discogs, listes classées, tags, statistiques visuelles et journal des opérations. Fonctionne en **SQLite (local / simple)** ou **Postgres (hébergement cloud sans disque persistant)** via une couche d'abstraction automatique.
 
+## Mini API FastAPI (Health) & Déploiement Vercel
+
+Le repository contient également une API Python minimale (FastAPI) servant uniquement un endpoint de santé `/health` avec documentation Swagger (`/docs`). Elle est déployable sur Vercel via une Serverless Function.
+
+Structure liée :
+```
+python-api/
+   app/main.py        # Application FastAPI (endpoint /health)
+api/index.py         # Entrypoint Serverless Vercel important dynamiquement l'app
+requirements.txt     # (copie racine) dépendances Python pour Vercel
+vercel.json          # Configuration (runtime python3.12, région, install)
+```
+
+Usage local :
+```bash
+python3 -m venv python-api/.venv
+source python-api/.venv/bin/activate
+pip install -r python-api/requirements.txt
+uvicorn python-api.app.main:app --reload --port 8010
+curl http://localhost:8010/health
+```
+
+Déploiement Vercel (automatique après push si connecté) :
+- Le dossier `api/` à la racine contient l'entrypoint `index.py` attendu par Vercel.
+- `vercel.json` (racine) force l'installation via `pip install -r requirements.txt`.
+- L'import Python ajoute dynamiquement `python-api/` au `sys.path` (le tiret empêche un import direct).
+
+Tests (pytest) :
+```bash
+pytest python-api/tests/test_health.py -q
+```
+
+Endpoint public (une fois déployé) : `https://<ton-projet-vercel>/api/health`
+
+Cette mini API est indépendante de l'API Node principale et sert de démonstration / point de contrôle de déploiement.
+
 ## Fonctionnalités principales
 
 - 🎵 Ajout d'albums (3 méthodes) : masterId Discogs, artiste+titre (résolution automatique), import bulk multi-lignes

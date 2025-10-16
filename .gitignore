@@ -1,11 +1,54 @@
+############################
+# Node / Frontend
+############################
 node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+############################
+# Bases de données locales (SQLite)
+############################
 *.db
 *.db-shm
 *.db-wal
+
+############################
+# Environnement / secrets
+############################
 .env
-*.log
+.env.local
+.env.*
+!.env.example
+
+############################
+# Python
+############################
+*.pyc
+__pycache__/
+python-api/__pycache__/
+python-api/app/__pycache__/
+.venv/
+python-api/.venv/
+.pytest_cache/
+.coverage
+coverage.xml
+
+############################
+# OS / Éditeur
+############################
 .DS_Store
 .vscode/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*music_collection.db*
+
+############################
+# Outils / CI / Vercel
+############################
+.vercel/
+
+############################
+# Logs génériques
+############################
+*.log
+
+# (music_collection.db déjà couvert par *.db)
