@@ -4,6 +4,5 @@
       "runtime": "python3.12"
     }
   },
-  "regions": ["cdg1"],
-  "installCommand": "pip install -r requirements.txt"
+  "regions": ["cdg1"]
 }
