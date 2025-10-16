@@ -1,17 +1,31 @@
-"""Entrypoint Serverless Vercel pour FastAPI.
+"""Fonction serverless FastAPI minimale pour Vercel.
 
-Ce fichier est à la racine `api/` (convention Vercel). On doit importer l'app FastAPI
-définie dans `python-api/app/main.py`. Comme le dossier contient un tiret, on ne peut pas
-utiliser un import direct par nom de package. On ajoute le chemin au sys.path et on importe.
+Définie inline pour éviter les hacks d'import liés au dossier `python-api/`.
+Expose `app` (ASGI) et `handler` pour compatibilité.
 """
 
-import sys
-from pathlib import Path
+from datetime import datetime, UTC
+import platform
+from fastapi import FastAPI
 
-root = Path(__file__).resolve().parent.parent / "python-api"
-sys.path.append(str(root))
+app = FastAPI(title="Music List Health API", version="0.1.0")
 
-from app.main import app  # type: ignore  # noqa: E402
 
-# Exposition pour Vercel
+@app.get("/health", tags=["health"], summary="Health check")
+def health():
+	return {
+		"status": "ok",
+		"time": datetime.now(UTC).isoformat(),
+		"python": platform.python_version(),
+		"app_version": "0.1.0",
+		"deployed": True,
+	}
+
+
+@app.get("/", include_in_schema=False)
+def root():
+	return {"message": "FastAPI health: voir /health ou /docs"}
+
+
+# Vercel peut utiliser handler ou app
 handler = app

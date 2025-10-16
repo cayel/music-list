@@ -16,11 +16,10 @@ Le repository contient également une API Python minimale (FastAPI) servant uniq
 
 Structure liée :
 ```
-python-api/
-   app/main.py        # Application FastAPI (endpoint /health)
-api/index.py         # Entrypoint Serverless Vercel important dynamiquement l'app
-requirements.txt     # (copie racine) dépendances Python pour Vercel
-vercel.json          # Configuration (runtime python3.12, région, install)
+api/index.py         # FastAPI health inline (serverless Vercel)
+python-api/          # (optionnel) version locale étendue si besoin
+requirements.txt     # Dépendances Python pour Vercel
+vercel.json          # Configuration (runtime python3.12, région)
 ```
 
 Usage local :
@@ -28,7 +27,7 @@ Usage local :
 python3 -m venv python-api/.venv
 source python-api/.venv/bin/activate
 pip install -r python-api/requirements.txt
-uvicorn python-api.app.main:app --reload --port 8010
+uvicorn python-api.app.main:app --reload --port 8010  # (version locale étendue)
 curl http://localhost:8010/health
 ```
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 import platform
 from fastapi import FastAPI
 
@@ -21,7 +21,7 @@ def health():
 	"""
 	return {
 		"status": "ok",
-		"time": datetime.utcnow().isoformat() + "Z",
+		"time": datetime.now(UTC).isoformat(),
 		"python": platform.python_version(),
 		"app_version": "0.1.0",
 	}
